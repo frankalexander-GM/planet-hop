@@ -1,0 +1,13 @@
+# dependencies (there are none, but keep the door open)
+node_modules/
+
+# build / editor noise
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# local secrets
+.env
+.env.local

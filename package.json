@@ -1,0 +1,16 @@
+{
+  "name": "planet-hop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hand-drawn planet hopping game with optional live multiplayer. Canvas, no engine, no dependencies.",
+  "scripts": {
+    "dev": "bun run play",
+    "play": "bun scripts/play.ts",
+    "net": "bun server/net-server.ts",
+    "test": "bun tests/run.ts"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "license": "MIT"
+}
