@@ -108,14 +108,14 @@ const checks = `
     ck('landing flips the new planet', false, 'never left home');
   }
 
-  // --- every deadly planet type exists and bites ---
+  // --- every planet type exists but all are harmless now ---
   var lava = findKind('isLava');
   ck('lava planets exist', !!lava);
   if (lava) {
     world = lava.world;
     world.player.planet = lava.planet; world.player.localAngle = 0; world.phase = 'playing';
     stepWorld(world, 1 / 60);
-    ck('lava kills on contact', world.phase === 'over');
+    ck('lava is harmless (no death)', world.phase === 'playing');
   }
   var hole = findKind('isHole');
   ck('black holes exist', !!hole);
@@ -127,7 +127,7 @@ const checks = `
     p.x = hole.planet.x + Math.cos(ha) * hd;
     p.y = hole.planet.y + Math.sin(ha) * hd; p.vx = 0; p.vy = 0;
     stepWorld(world, 1 / 60);
-    ck('black hole swallows you', world.phase === 'over');
+    ck('black hole is harmless (no death)', world.phase === 'playing');
   }
   var trap = findKind('isTrap');
   ck('dead worlds exist', !!trap);
@@ -141,7 +141,7 @@ const checks = `
     ck('volcano reports the eruption', volcanoPhase(v) === 'erupt');
   }
 
-  // --- the burn-out cactus ---
+  // --- cactus is just decoration now ---
   var cac = findKind('isCactus');
   ck('cactus planets exist', !!cac);
   if (cac) {
@@ -150,8 +150,7 @@ const checks = `
     world.player.planet = c; world.player.localAngle = c.cacti[0].angle;
     world.phase = 'playing';
     stepWorld(world, 1 / 60);
-    ck('touching it costs points', world.score === 100 - TUN.CACTUS_COST);
-    ck('and burns it out without killing', c.cactusCharges === 0 && world.phase === 'playing');
+    ck('cactus is harmless (no drain, no death)', world.score === 100 && world.phase === 'playing');
   }
 
   // --- six scenarios ---

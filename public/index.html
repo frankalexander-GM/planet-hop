@@ -735,11 +735,7 @@
                 xFrac: r(10),
                 dxSign: r(11) < 0.5 ? -1 : 1,
                 ring: r(13) > 0.72, // some planets get hand-drawn Saturn rings
-                points: isGalaxy
-                    ? -(10 + Math.floor(r(14) * 11)) // galaxies charge a toll
-                    : isLeech
-                        ? -(TUN.LEECH_MIN + Math.floor(r(14) * (TUN.LEECH_MAX - TUN.LEECH_MIN)))
-                        : 5 + Math.floor(r(14) * 26),
+                points: 5 + Math.floor(r(14) * 26), // every planet pays: no damage
                 safe: safe
             };
         }
@@ -843,6 +839,7 @@
                 g.planets.push(createPlanet(g.nextIndex, seed, rx, lastY));
                 g.nextIndex += 1;
             }
+            try { if (typeof applyPendingFlips === 'function') applyPendingFlips(g); } catch (e) {}
             return g;
         }
 
@@ -864,15 +861,8 @@
             p.airTime = 0;
         }
 
-        // Lives a cactus has at this altitude: one on the ground, up to three once
-        // you are deep in the sky. Climbing is the difficulty curve.
-        function cactusChargesFor(cameraY) {
-            var extra = Math.floor(Math.max(0, -cameraY) / TUN.CACTUS_CAP_STEP);
-            return Math.min(TUN.CACTUS_CAP_MAX, 1 + extra);
-        }
-
-        // Volcanos run a quiet → warn → erupt cycle. Only the eruption bites, so
-        // this is a timing trap rather than a wall.
+        // Volcanos run a quiet → warn → erupt cycle. Pure show now:
+        // pretty timing, no bite.
         function volcanoPhase(planet) {
             var t = planet.volcanoT % TUN.VOLCANO_PERIOD;
             if (t > TUN.VOLCANO_PERIOD - TUN.VOLCANO_ERUPT) return 'erupt';
@@ -895,32 +885,19 @@
             // speeds it up: the ground you just arrived on always turns the
             // opposite way from now on.
             planet.rotationSpeed = -planet.rotationSpeed * (1 + planet.flipKick);
+            planet.lastFlipN = (planet.lastFlipN || 0) + 1;
+            // Net: share the flip so every screen rotates together.
+            g.lastFlip = { planet: planet.id, rot: planet.rotation, speed: planet.rotationSpeed };
             g.events.push('flip');
-            // Coming back re-arms the cactus, with the lives this altitude
-            // deserves: it gets meaner the higher you get.
-            if (planet.isCactus) {
-                planet.cactusCharges = cactusChargesFor(g.cameraY);
-            }
-            // Trap worlds: touching down is game over, no payout.
-            if (planet.isTrap) {
-                g.streak = 0;
-                endRun(g);
-                return;
-            }
+            // Every planet pays and counts: no traps, only climbing.
             if (!planet.scored) {
                 planet.scored = true;
-                // Galaxy tolls subtract; the score never dips below zero.
-                g.score = Math.max(0, g.score + planet.points);
+                g.score += planet.points;
                 g.events.push('land');
-                // Streak: only clean paying landings count. Tolls reset it.
-                if (planet.points >= 0 && !planet.isCactus) {
-                    g.streak = (g.streak || 0) + 1;
-                    if (g.streak % TUN.STREAK_EVERY === 0) {
-                        g.score += TUN.STREAK_BONUS;
-                        g.events.push('streak');
-                    }
-                } else {
-                    g.streak = 0;
+                g.streak = (g.streak || 0) + 1;
+                if (g.streak % TUN.STREAK_EVERY === 0) {
+                    g.score += TUN.STREAK_BONUS;
+                    g.events.push('streak');
                 }
                 // A new planet up = a new scenario every few climbs.
                 g.planetsPassed += 1;
@@ -953,20 +930,8 @@
                 var d = planet.radius + TUN.PLAYER_R;
                 p.x = planet.x + Math.cos(a) * d;
                 p.y = planet.y + Math.sin(a) * d;
-                // Dust devil: dead if you are inside its funnel column. The column is the
-                // shape you actually see, so near misses live.
-                if (planet.hasObstacle) {
-                    var va = planet.rotation + planet.obstacleAngle;
-                    var vbx = planet.x + Math.cos(va) * planet.radius;
-                    var vby = planet.y + Math.sin(va) * planet.radius;
-                    var vtx = planet.x + Math.cos(va) * (planet.radius + TUN.VORTEX_H);
-                    var vty = planet.y + Math.sin(va) * (planet.radius + TUN.VORTEX_H);
-                    if (segDist(p.x, p.y, vbx, vby, vtx, vty) <
-                        TUN.PLAYER_R + TUN.VORTEX_HIT) {
-                        endRun(g);
-                        return;
-                    }
-                }
+                // Dust devils just sweep past now: pretty, harmless.
+                // (The devil still drifts along the surface in stepWorld.)
                 // Star: distance test, same reach on every planet size.
                 if (planet.hasStar && !planet.starCollected) {
                     s = starPos(planet);
@@ -978,41 +943,7 @@
                         g.events.push('star');
                     }
                 }
-                // Lava: the crust itself is lethal. Standing on it is not an option.
-                if (planet.isLava) {
-                    endRun(g);
-                    return;
-                }
-                // Volcano: only the eruption kills, and it warns first.
-                if (planet.isVolcano && volcanoPhase(planet) === 'erupt') {
-                    var va2 = planet.rotation + planet.volcanoAngle;
-                    var ebx = planet.x + Math.cos(va2) * planet.radius;
-                    var eby = planet.y + Math.sin(va2) * planet.radius;
-                    var etx = planet.x + Math.cos(va2) * (planet.radius + TUN.VOLCANO_H);
-                    var ety = planet.y + Math.sin(va2) * (planet.radius + TUN.VOLCANO_H);
-                    if (segDist(p.x, p.y, ebx, eby, etx, ety) < TUN.PLAYER_R + 12) {
-                        endRun(g);
-                        return;
-                    }
-                }
-                // One cactus. Touch it and it costs you points, then it burns out and is
-                // gone for the rest of this visit.
-                if (planet.isCactus && planet.cactusCharges > 0 && planet.cacti) {
-                    var cact = planet.cacti[0];
-                    var cra = planet.rotation + cact.angle;
-                    var cbx = planet.x + Math.cos(cra) * planet.radius;
-                    var cby = planet.y + Math.sin(cra) * planet.radius;
-                    var ctipX = planet.x + Math.cos(cra) * (planet.radius + TUN.CACTUS_H);
-                    var ctipY = planet.y + Math.sin(cra) * (planet.radius + TUN.CACTUS_H);
-                    if (segDist(p.x, p.y, cbx, cby, ctipX, ctipY) <
-                        TUN.PLAYER_R + TUN.CACTUS_HIT) {
-                        g.lastDrain = TUN.CACTUS_COST * planet.cactusCharges;
-                        g.score = Math.max(0, g.score - g.lastDrain);
-                        planet.cactusCharges = 0; // burned out
-                        g.streak = 0; // brushing it breaks the streak
-                        g.events.push('drain');
-                    }
-                }
+                // Lava crust, volcanoes, cacti: all pretty, all harmless now.
                 return;
             }
 
@@ -1029,8 +960,6 @@
                 var pullX = 0, pullY = 0, k, pl, ox, oy, od;
                 for (k = 0; k < g.planets.length; k++) {
                     pl = g.planets[k];
-                    // Dead worlds pull nothing: traps lure with looks alone.
-                    if (pl.isTrap) continue;
                     ox = pl.x - p.x;
                     oy = pl.y - p.y;
                     od = Math.sqrt(ox * ox + oy * oy);
@@ -1064,21 +993,7 @@
             p.x += p.vx * dt;
             p.y += p.vy * dt;
 
-            // Black holes park above the surface and eat whatever drifts in.
-            if (p.airTime >= TUN.LAND_GRACE) {
-                for (i = 0; i < g.planets.length; i++) {
-                    planet = g.planets[i];
-                    if (!planet.isHole) continue;
-                    var ha = planet.rotation + planet.holeAngle;
-                    var hd = planet.radius + TUN.HOLE_OFFSET;
-                    var hx = planet.x + Math.cos(ha) * hd;
-                    var hy = planet.y + Math.sin(ha) * hd;
-                    if (Math.hypot(p.x - hx, p.y - hy) < TUN.HOLE_R) {
-                        endRun(g);
-                        return;
-                    }
-                }
-            }
+            // Black holes just swirl pretty now: fly through, no bite.
 
             // Landing sticks on contact — except home, until the doodle has
             // left its shell once. Any OTHER planet catches immediately,
@@ -1122,6 +1037,7 @@
             g.planets = g.planets.filter(function (pl) {
                 return pl.y < floor || pl === current || pl === home;
             });
+            try { if (typeof applyPendingFlips === 'function') applyPendingFlips(g); } catch (e) {}
         }
 
         function stepWorld(g, dt) {
@@ -1860,41 +1776,22 @@
             ctx.translate(planet.x, planet.y - cameraY);
             // Rescue ring: the visible attraction range. Touch it and the
             // planet reels you in instead of letting you fall past.
-            // Trap worlds get a red "no rescue" ring instead: honest warning.
-            // Leeches show a dashed crimson ring: they will take, not save.
-            if (!planet.isTrap) {
-                ctx.save();
-                ctx.globalAlpha = 0.3;
-                ctx.strokeStyle = planet.isLeech ? '#dc2626'
-                    : planet.isLava ? '#f97316'
-                    : planet.isVolcano ? '#fb923c'
-                    : planet.isHole ? '#f59e0b'
-                    : planet.isGalaxy ? '#a78bfa'
-                    : planet.isCactus ? '#7fb069'
-                    : '#6aa8d8';
-                ctx.lineWidth = planet.isGalaxy || planet.isLeech || planet.isCactus ? 3 : 2;
-                ctx.setLineDash([8, 8]);
-                ctx.beginPath();
-                ctx.arc(0, 0, planet.radius + TUN.CATCH, 0, TAU);
-                ctx.stroke();
-                ctx.restore();
-            } else {
-                ctx.save();
-                ctx.globalAlpha = 0.35;
-                ctx.strokeStyle = '#b91c1c';
-                ctx.lineWidth = 2.5;
-                ctx.beginPath();
-                ctx.arc(0, 0, planet.radius + 14, 0, TAU);
-                ctx.stroke();
-                // Crossed out: this landing kills.
-                ctx.beginPath();
-                ctx.moveTo(-planet.radius * 0.4, -planet.radius * 0.4);
-                ctx.lineTo(planet.radius * 0.4, planet.radius * 0.4);
-                ctx.moveTo(planet.radius * 0.4, -planet.radius * 0.4);
-                ctx.lineTo(-planet.radius * 0.4, planet.radius * 0.4);
-                ctx.stroke();
-                ctx.restore();
-            }
+            // Every planet gets one now: no traps, only climbing.
+            ctx.save();
+            ctx.globalAlpha = 0.3;
+            ctx.strokeStyle = planet.isLeech ? '#dc2626'
+                : planet.isLava ? '#f97316'
+                : planet.isVolcano ? '#fb923c'
+                : planet.isHole ? '#f59e0b'
+                : planet.isGalaxy ? '#a78bfa'
+                : planet.isCactus ? '#7fb069'
+                : '#6aa8d8';
+            ctx.lineWidth = planet.isGalaxy || planet.isLeech || planet.isCactus ? 3 : 2;
+            ctx.setLineDash([8, 8]);
+            ctx.beginPath();
+            ctx.arc(0, 0, planet.radius + TUN.CATCH, 0, TAU);
+            ctx.stroke();
+            ctx.restore();
             if (!planet.scored) {
                 var jackpot = planet.points >= 25;
                 ctx.fillStyle = jackpot ? '#b45309' : 'rgba(43,43,43,0.78)';
@@ -2135,32 +2032,6 @@
             ctx.restore();
         }
 
-        // 2D pencil danger tell: tiny hand-drawn "!" above lethal worlds.
-        // Render-only, never touches the sim. Keeps the notebook look.
-        function drawDangerMarks(g) {
-            var i, pl, y, label = '';
-            ctx.save();
-            ctx.textAlign = 'center';
-            ctx.font = '700 18px ' + CANVAS_FONT;
-            for (i = 0; i < g.planets.length; i++) {
-                pl = g.planets[i];
-                label = '';
-                if (pl.isTrap) label = '! dead';
-                else if (pl.isLava) label = '! hot';
-                else if (pl.isHole) label = '! hole';
-                else if (pl.isVolcano && volcanoPhase(pl) !== 'quiet') label = '!';
-                else if (pl.isLeech) label = '-pts';
-                else if (pl.isGalaxy) label = 'toll';
-                if (!label) continue;
-                y = pl.y - g.cameraY - pl.radius - 18;
-                if (y < -20 || y > g.viewH + 20) continue;
-                ctx.globalAlpha = 0.75;
-                ctx.fillStyle = (pl.isTrap || pl.isLava || pl.isHole) ? '#b91c1c' : '#92400e';
-                ctx.fillText(label, pl.x, y);
-            }
-            ctx.restore();
-        }
-
         // 2D pencil ghosts: other players, same paper look. Render-only.
         // Names live in a fixed list under the score counter (top-left),
         // never in the middle of the play.
@@ -2241,6 +2112,22 @@
                 ctx.fillStyle = '#374151';
                 ctx.fillText((n + 1) + '. ' + String(board[n].name || '?').slice(0, 10) + ' ' + (board[n].alt || 0) + 'm', 27, ny);
             }
+            ctx.restore();
+        }
+
+        // Spectate hint: who you watch + tap to come back. 2D canvas text.
+        function drawSpectateHint(g) {
+            try {
+                if (typeof net === 'undefined' || !net.spectating || !g || g.phase !== 'over') return;
+            } catch (e) { return; }
+            var nm = '';
+            try { nm = spectateName(); } catch (e) {}
+            ctx.save();
+            ctx.globalAlpha = 0.85;
+            ctx.textAlign = 'center';
+            ctx.font = "400 19px 'Patrick Hand', cursive";
+            ctx.fillStyle = '#374151';
+            ctx.fillText('👁 ' + (nm || '…') + ' · tap para volver', g.viewW / 2, g.viewH * 0.8);
             ctx.restore();
         }
 
@@ -2396,13 +2283,13 @@
             if (me) drawSpinArrow(me);
             drawPlayer(g, f);
             drawGravityTugs(g);
-            drawDangerMarks(g);
             drawGhosts(g);
             ctx.restore();
             drawRipplesAndTrail();
             drawParts();
             drawPopups();
             drawTutorialHint(g);
+            drawSpectateHint(g);
             // Altitude meter, pencil-style, bottom-left out of the way.
             ctx.save();
             ctx.globalAlpha = 0.65;
@@ -2604,8 +2491,10 @@
             ws: null, active: false, myId: null, myName: 'Player',
             code: '', seed: 0, color: '#8B5CF6',
             players: [], states: [], medals: [], started: false, over: false,
-            lastSend: 0, board: null, pendingOp: ''
+            lastSend: 0, board: null, pendingOp: '', pendingFlips: {},
+            spectating: null, deathSent: false
         };
+        function netIsOwner() { return net.active && net.myId && net.owner && net.myId === net.owner; }
 
         function netSay(o) {
             try { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); } catch (e) {}
@@ -2676,8 +2565,10 @@
         }
         function showNetButtons(inRoom) {
             var r = document.getElementById('netReady'), m = document.getElementById('netRematch'), l = document.getElementById('netLeave');
-            if (r) r.style.display = inRoom && !net.started ? 'block' : 'none';
-            if (m) m.style.display = inRoom ? 'block' : 'none';
+            // Only the creator (admin) starts rounds: READY + REMATCH are theirs.
+            var admin = netIsOwner();
+            if (r) r.style.display = (inRoom && !net.started && admin) ? 'block' : 'none';
+            if (m) m.style.display = (inRoom && admin) ? 'block' : 'none';
             if (l) l.style.display = inRoom ? 'block' : 'none';
             var b = document.getElementById('roomBadge');
             if (b) { b.style.display = inRoom ? 'inline-block' : 'none'; if (inRoom) b.textContent = net.code || '----'; }
@@ -2738,9 +2629,42 @@
             }
             if (m.t === 'go') {
                 net.seed = m.seed; net.started = true; net.over = false;
+                net.spectating = null; net.deathSent = false; net.pendingFlips = {};
                 startRunSeeded(net.seed);
                 netStatus('GO! room ' + net.code + ' · same planets for all.');
                 showNetButtons(true);
+                return;
+            }
+            if (m.t === 'flipped') {
+                // Shared spin: someone landed — same rotation for everyone.
+                if (m.by !== net.myId && world && world.planets) {
+                    var hit = null, h;
+                    for (h = 0; h < world.planets.length; h++) {
+                        if (world.planets[h].id === m.planet) { hit = world.planets[h]; break; }
+                    }
+                    if (hit) {
+                        var cur = hit.lastFlipN || 0;
+                        if (m.n > cur) {
+                            for (var q = cur; q < m.n; q++) {
+                                hit.rotationSpeed = -hit.rotationSpeed * (1 + hit.flipKick);
+                            }
+                            hit.lastFlipN = m.n;
+                            if (isFinite(m.rot)) hit.rotation = m.rot;
+                        }
+                    } else {
+                        // Planet not generated yet: apply speed when it appears.
+                        net.pendingFlips[m.planet] = { n: m.n, speed: m.speed };
+                    }
+                }
+                return;
+            }
+            if (m.t === 'syncState') {
+                // Catch-up after respawn: adopt shared spin speeds.
+                var list = m.flips || [];
+                for (var sf = 0; sf < list.length; sf++) {
+                    net.pendingFlips[list[sf].planet] = { n: list[sf].n, speed: list[sf].speed };
+                }
+                applyPendingFlips();
                 return;
             }
             if (m.t === 'players') {
@@ -2778,6 +2702,7 @@
             }
             if (m.t === 'over') {
                 net.over = true;
+                net.spectating = null;
                 var pod = (m.podium || []).map(function (p) { return p.medal + ' ' + p.name + ' (' + p.alt + 'm)'; }).join(' · ');
                 showMenu('Round over!', pod || 'podium is empty — rematch?', 'KEEP HOPPING (solo)');
                 menuShown = true;
@@ -2787,6 +2712,7 @@
             }
             if (m.t === 'reset') {
                 net.seed = m.seed; net.over = false; net.started = false;
+                net.spectating = null; net.deathSent = false; net.pendingFlips = {};
                 resize();
                 world = createWorld(width, height, readBest(), net.seed);
                 world.phase = 'idle';
@@ -2796,6 +2722,28 @@
             }
             if (m.t === 'bye') { netDrawBoard(); return; }
             if (m.t === 'error') { netStatus(m.message || 'net error'); return; }
+        }
+        // Catch-up spins for planets generated after the flip happened.
+        function applyPendingFlips(g) {
+            try {
+                if (typeof net === 'undefined') return;
+                if (!net.pendingFlips) return;
+            } catch (e) { return; }
+            g = g || world;
+            if (!g || !g.planets) return;
+            for (var i = 0; i < g.planets.length; i++) {
+                var pl = g.planets[i];
+                var pend = net.pendingFlips[pl.id];
+                if (!pend) continue;
+                var cur = pl.lastFlipN || 0;
+                if (pend.n > cur) {
+                    for (var q = cur; q < pend.n; q++) {
+                        pl.rotationSpeed = -pl.rotationSpeed * (1 + pl.flipKick);
+                    }
+                    pl.lastFlipN = pend.n;
+                }
+                delete net.pendingFlips[pl.id];
+            }
         }
         function netDrawBoard() {
             var el = document.getElementById('netBoard');
@@ -2829,6 +2777,11 @@
             if (world.lastStarPlanet !== undefined && world.lastStarPlanet !== null) {
                 netSay({ t: 'star', planet: world.lastStarPlanet });
                 world.lastStarPlanet = null;
+            }
+            if (world.lastFlip) {
+                // Shared spin: my landing flips the planet for everyone.
+                netSay({ t: 'flip', planet: world.lastFlip.planet, rot: world.lastFlip.rot, speed: world.lastFlip.speed });
+                world.lastFlip = null;
             }
         }
 
@@ -2885,6 +2838,33 @@
             world.score = s;
             if (world.highScore < h) world.highScore = h;
             scoreText.textContent = String(s);
+            net.spectating = null;
+            net.deathSent = false;
+            netSay({ t: 'sync' }); // catch up shared spins after respawn
+        }
+
+        // Spectate: follow the closest living player while dead.
+        function netFindState(id) {
+            if (!id || !net.states) return null;
+            for (var i = 0; i < net.states.length; i++) {
+                if (net.states[i] && net.states[i].id === id) return net.states[i];
+            }
+            return null;
+        }
+        function pickSpectate() {
+            if (!world || !net.states) return null;
+            var best = null, bestD = 1e12, i, s, d;
+            for (i = 0; i < net.states.length; i++) {
+                s = net.states[i];
+                if (!s || s.id === net.myId || s.dead) continue;
+                d = Math.hypot(s.x - world.player.x, s.y - world.player.y);
+                if (d < bestD) { bestD = d; best = s.id; }
+            }
+            return best;
+        }
+        function spectateName() {
+            var t = netFindState(net.spectating);
+            return t && t.name ? String(t.name).slice(0, 12) : '';
         }
 
         function showMenu(title, subtitle, button) {
@@ -2902,8 +2882,18 @@
         }
 
         function gameOver() {
-            // Net mode: nobody is eliminated — climb again, same seed.
+            // Net mode: nobody is eliminated — spectate the closest,
+            // tap to climb again with the same seed.
             if (net.active && net.started && !net.over) {
+                net.spectating = pickSpectate();
+                var nm = spectateName();
+                if (net.spectating) {
+                    fx.banner = 'WATCHING ' + nm.toUpperCase();
+                    fx.bannerT = 2.6;
+                    netStatus('eliminado · viendo a ' + nm + ' (el más cercano) · toca para volver.');
+                    menuShown = true;
+                    return;
+                }
                 showMenu('Ouch! Keep climbing!',
                     'room ' + net.code + ' · score ' + world.score + ' · best height counts, tap to go again.',
                     'CLIMB AGAIN');
@@ -2961,13 +2951,6 @@
                 popup(p.x, p.y - 30, '+5', '#b45309');
                 puff(p.x, p.y, 5, STAR_COLOR, 160);
                 fx.shake = Math.max(fx.shake, 1.5);
-            } else if (e === 'drain') {
-                sound.drain();
-                buzz(30);
-                var burn = world.lastDrain || TUN.CACTUS_COST;
-                popup(p.x, p.y - 34, '-' + burn, '#b45309');
-                puff(p.x, p.y, 8, '#8fbf7f', 180);
-                fx.shake = Math.max(fx.shake, 2);
             } else if (e === 'die') {
                 sound.hit();
                 buzz([40, 40, 60]);
@@ -3008,6 +2991,33 @@
             // Let the death animation play before covering it with the menu.
             if (world.phase === 'over' && !menuShown && fx.dieT > 0.9) {
                 gameOver();
+            }
+
+            // Net: tell the room we died (frozen ghost for the others).
+            if (net.active && net.started && !net.over && world.phase === 'over' && !net.deathSent) {
+                net.deathSent = true;
+                netSay({
+                    t: 'pos',
+                    x: Math.round(world.player.x * 10) / 10,
+                    y: Math.round(world.player.y * 10) / 10,
+                    w: world.viewW, alt: netAlt(),
+                    planet: null, angle: 0, air: false,
+                    score: world.score, dead: true
+                });
+            }
+
+            // Spectate: ride the camera along the closest living player.
+            if (net.spectating && world.phase === 'over') {
+                var tgt = netFindState(net.spectating);
+                if (!tgt || tgt.dead) {
+                    net.spectating = pickSpectate();
+                    tgt = netFindState(net.spectating);
+                }
+                if (tgt) {
+                    var wantCam = tgt.y - world.viewH * TUN.CAM_ANCHOR;
+                    world.targetCameraY = wantCam;
+                    world.cameraY += (wantCam - world.cameraY) * Math.min(1, TUN.CAM_LERP * dt);
+                }
             }
 
             if (scoreText.textContent !== String(world.score)) {

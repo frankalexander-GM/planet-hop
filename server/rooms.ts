@@ -89,6 +89,8 @@ export interface Room {
   stars: Map<number, string>;
   /** medal place -> player name */
   medals: Map<number, string>;
+  /** planet index -> shared spin state (same rotation for all) */
+  flips: Map<number, { n: number; rot: number; speed: number }>;
   over: boolean;
   started: boolean;
   createdAt: number;
@@ -209,7 +211,7 @@ export function wsMessage(ws: any, raw: any) {
     const room: Room = {
       code, seed: (Math.random() * 0x7fffffff) | 0,
       players: new Map(), sockets: new Map(),
-      stars: new Map(), medals: new Map(),
+      stars: new Map(), medals: new Map(), flips: new Map(),
       over: false, started: false, createdAt: Date.now(),
     };
     rooms.set(code, room);
@@ -247,6 +249,30 @@ export function wsMessage(ws: any, raw: any) {
     return;
   }
 
+  // Shared spin: whoever lands flips the planet for EVERYONE,
+  // so all screens rotate together with no distortion.
+  if (msg.t === 'flip') {
+    const planet = msg.planet;
+    if (!Number.isInteger(planet) || planet < 0) return;
+    const prev = room.flips.get(planet);
+    const n = (prev?.n || 0) + 1;
+    const rot = isNum(msg.rot) ? msg.rot : 0;
+    const speed = isNum(msg.speed) ? msg.speed : 0;
+    room.flips.set(planet, { n, rot, speed });
+    const who = room.players.get(id);
+    broadcast(room, { t: 'flipped', planet, n, rot, speed, by: id, name: who?.name || '' });
+    return;
+  }
+
+  // Catch-up for respawns: same spin state, no distortion.
+  if (msg.t === 'sync') {
+    ws.send(JSON.stringify({
+      t: 'syncState',
+      flips: [...room.flips.entries()].map(([planet, f]) => ({ planet, n: f.n, rot: f.rot, speed: f.speed })),
+    }));
+    return;
+  }
+
   if (msg.t === 'pos') {
     const p = room.players.get(id);
     if (!p) return;
@@ -281,6 +307,7 @@ export function wsMessage(ws: any, raw: any) {
     room.seed = (Math.random() * 0x7fffffff) | 0;
     room.stars.clear();
     room.medals.clear();
+    room.flips.clear();
     room.over = false;
     room.started = false;
     for (const p of room.players.values()) {
