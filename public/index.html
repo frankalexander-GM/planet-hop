@@ -2164,39 +2164,60 @@
         // 2D pencil ghosts: other players, same paper look. Render-only.
         // Names live in a fixed list under the score counter (top-left),
         // never in the middle of the play.
+        // Same doodle figure as you, in their color, live. Render-only.
+        function drawGhostFigure(x, y, color, t) {
+            var wave = Math.sin(t * 6) * 4;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.globalAlpha = 0.92;
+            roughLine(ctx, 0, 8, -6, 16, 301, 2.5);
+            roughLine(ctx, 0, 8, 6, 16, 302, 2.5);
+            roughLineDouble(ctx, 0, -4, 0, 8, 303, 2.5);
+            roughLineDouble(ctx, 0, -2, -8, 2 + wave, 304, 2);
+            roughLineDouble(ctx, 0, -2, 8, 2 - wave, 305, 2);
+            // Scarf in the player's color: same character, own color.
+            roughLine(ctx, -2, -5, -12 - wave * 0.6, -9, 401, 3, color);
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(-2, -5, 2.2, 0, TAU);
+            ctx.fill();
+            inkedShape(ctx, roughCircle(8, 306), '#ffffff', 2.5);
+            ctx.fillStyle = FIGURE;
+            ctx.beginPath();
+            ctx.arc(-3, -13, 1.5, 0, TAU);
+            ctx.arc(3, -13, 1.5, 0, TAU);
+            ctx.fill();
+            ctx.strokeStyle = FIGURE;
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.arc(0, -11, 4, 0.2, Math.PI - 0.2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
         function drawGhosts(g) {
             try {
                 if (typeof net === 'undefined' || !net.states || !net.active) return;
             } catch (e) { return; }
-            var i, s, sy;
+            var i, s, sy, gx;
             ctx.save();
             for (i = 0; i < net.states.length; i++) {
                 s = net.states[i];
                 if (!s || s.id === net.myId) continue;
                 if (s.dead) continue;
+                // Same world on every screen: x travels as a fraction
+                // of each screen width, y is already absolute.
+                gx = (s.w > 0 && g.viewW > 0) ? s.x / s.w * g.viewW : s.x;
                 sy = s.y - g.cameraY;
-                // Ghost doodle itself (no name on top of the action).
-                if (sy > -40 && sy < g.viewH + 40) {
-                    ctx.globalAlpha = 0.85;
-                    ctx.fillStyle = s.color || '#8B5CF6';
-                    ctx.beginPath();
-                    ctx.arc(s.x, sy, 11, 0, TAU);
-                    ctx.fill();
-                    ctx.globalAlpha = 1;
-                    ctx.strokeStyle = '#2b2b2b';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                    // eyes, same doodle face
-                    ctx.fillStyle = '#fff';
-                    ctx.beginPath();
-                    ctx.arc(s.x - 3.5, sy - 2, 2.6, 0, TAU);
-                    ctx.arc(s.x + 3.5, sy - 2, 2.6, 0, TAU);
-                    ctx.fill();
-                    ctx.fillStyle = '#111827';
-                    ctx.beginPath();
-                    ctx.arc(s.x - 3.5, sy - 2, 1.2, 0, TAU);
-                    ctx.arc(s.x + 3.5, sy - 2, 1.2, 0, TAU);
-                    ctx.fill();
+                if (sy > -50 && sy < g.viewH + 50 && gx > -40 && gx < g.viewW + 40) {
+                    drawGhostFigure(gx, sy, s.color || '#8B5CF6', g.time + i * 1.7);
+                    if (s.name) {
+                        ctx.globalAlpha = 0.9;
+                        ctx.textAlign = 'center';
+                        ctx.font = '700 13px ' + CANVAS_FONT;
+                        ctx.fillStyle = '#374151';
+                        ctx.fillText(String(s.name).slice(0, 12), gx, sy - 30);
+                    }
                 }
             }
             // Fixed rows under the counter, ordered by height:
@@ -2799,6 +2820,7 @@
             netSay({
                 t: 'pos',
                 x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10,
+                w: world.viewW,
                 alt: netAlt(),
                 planet: p.planet ? p.planet.id : null,
                 angle: 0, air: !p.planet, score: world.score,

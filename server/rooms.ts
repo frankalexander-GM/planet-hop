@@ -71,6 +71,7 @@ export interface Player {
   color: string;
   x: number;
   y: number;
+  w: number;   // sender screen width: x travels as x/w so every
   alt: number;   // metres climbed
   planet: number | null;
   angle: number;
@@ -160,7 +161,7 @@ function joinRoom(room: Room, ws: any, ctx: any, name: string) {
   room.sockets.set(id, ws);
   room.players.set(id, {
     id, name, color: pickColor(room),
-    x: 0, y: 0, alt: 0, planet: null, angle: 0, air: true,
+    x: 0, y: 0, w: 0, alt: 0, planet: null, angle: 0, air: true,
     score: 0, dead: false,
   });
   ctx.room = room;
@@ -253,6 +254,7 @@ export function wsMessage(ws: any, raw: any) {
       p.x = msg.x;
       p.y = msg.y;
     }
+    if (isNum(msg.w) && msg.w > 0) p.w = Math.min(msg.w, 5000); // screen width for x-normalizing
     if (isNum(msg.alt) && msg.alt > p.alt) p.alt = Math.min(msg.alt, 9999); // best height kept
     p.planet = Number.isInteger(msg.planet) ? msg.planet : null;
     p.angle = isNum(msg.angle) ? msg.angle : 0;
@@ -326,10 +328,11 @@ export function startLoops() {
       if (room.sockets.size === 0) continue;
       broadcast(room, {
         t: 'states',
-        states: [...room.players.values()].map((p) => ({
-          id: p.id,
-          x: Math.round(p.x * 10) / 10,
-          y: Math.round(p.y * 10) / 10,
+      states: [...room.players.values()].map((p) => ({
+        id: p.id,
+        x: Math.round(p.x * 10) / 10,
+        y: Math.round(p.y * 10) / 10,
+        w: p.w,
           planet: p.planet,
           angle: Math.round(p.angle * 1000) / 1000,
           air: p.air,
