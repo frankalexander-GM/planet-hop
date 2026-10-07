@@ -322,7 +322,7 @@
                 </div>
                 <input id="netCode" maxlength="8" placeholder="room code (4 letras)" style="text-transform:uppercase" />
                 <div id="netRow2" style="display:flex;gap:0.4rem;margin-top:0.25rem">
-                    <button id="netReady" class="btn-sketch" style="flex:1;display:none">READY!</button>
+                    <button id="netReady" class="btn-sketch" style="flex:1;display:none">START</button>
                     <button id="netRematch" class="btn-sketch" style="flex:1;display:none">REMATCH</button>
                     <button id="netLeave" class="btn-sketch" style="flex:1;display:none">SALIR</button>
                 </div>
@@ -2489,12 +2489,12 @@
            Render-only ghosts: 2D pencil, never touch the sim. */
         var net = {
             ws: null, active: false, myId: null, myName: 'Player',
-            code: '', seed: 0, color: '#8B5CF6',
+            code: '', seed: 0, creatorId: null, color: '#8B5CF6',
             players: [], states: [], medals: [], started: false, over: false,
             lastSend: 0, board: null, pendingOp: '', pendingFlips: {},
             spectating: null, deathSent: false
         };
-        function netIsOwner() { return net.active && net.myId && net.owner && net.myId === net.owner; }
+        function netIsOwner() { return net.active && net.myId && net.creatorId && net.myId === net.creatorId; }
 
         function netSay(o) {
             try { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); } catch (e) {}
@@ -2592,6 +2592,7 @@
             if (m.t === 'welcome') { net.myId = m.id; return; }
             if (m.t === 'room') {
                 net.active = true; net.code = m.code; net.seed = m.seed;
+                net.creatorId = m.creatorId || null;
                 net.myId = (m.you && m.you.id) || net.myId;
                 net.color = (m.you && m.you.color) || net.color;
                 net.started = !!m.started; net.over = false;

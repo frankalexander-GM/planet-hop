@@ -91,6 +91,8 @@ export interface Room {
   medals: Map<number, string>;
   /** planet index -> shared spin state (same rotation for all) */
   flips: Map<number, { n: number; rot: number; speed: number }>;
+  /** creator's player id */
+  creatorId: string | null;
   over: boolean;
   started: boolean;
   createdAt: number;
@@ -171,6 +173,7 @@ function joinRoom(room: Room, ws: any, ctx: any, name: string) {
     t: 'room',
     code: room.code,
     seed: room.seed,
+    creatorId: room.creatorId,
     you: { id, name, color: room.players.get(id)!.color },
     players: [...room.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color, score: p.score, alt: 0, dead: false,
@@ -212,6 +215,7 @@ export function wsMessage(ws: any, raw: any) {
       code, seed: (Math.random() * 0x7fffffff) | 0,
       players: new Map(), sockets: new Map(),
       stars: new Map(), medals: new Map(), flips: new Map(),
+      creatorId: ctx.id,
       over: false, started: false, createdAt: Date.now(),
     };
     rooms.set(code, room);
