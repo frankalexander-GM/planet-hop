@@ -7,6 +7,8 @@
     "dev": "bun run play",
     "play": "bun scripts/play.ts",
     "net": "bun server/net-server.ts",
+    "web": "bun server/web.ts",
+    "start": "bun server/web.ts",
     "test": "bun tests/run.ts"
   },
   "engines": {

@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#f6f3eb">
     <title>Planet Hop</title>
     <!-- Handwritten notebook fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,7 +25,10 @@
             font-family: 'Patrick Hand', cursive, sans-serif;
             user-select: none;
             -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
             touch-action: manipulation;
+            overscroll-behavior: none;
             background-color: #f4f1ea;
             height: 100vh;
             height: 100dvh;
@@ -30,8 +37,9 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            position: relative;
             color: #1f2937;
+            position: fixed;
+            inset: 0;
         }
 
         /* Notebook paper grid + red margin + punched holes */
@@ -60,6 +68,8 @@
             font-weight: 700;
             cursor: pointer;
             color: #1e293b;
+            min-height: 44px;
+            font-size: 1.1rem;
         }
 
         .btn-sketch:hover {
@@ -91,7 +101,9 @@
         /* Score ribbon + mute */
         #hud {
             position: absolute;
-            top: 1rem; left: 1rem; right: 1rem;
+            top: calc(1rem + env(safe-area-inset-top, 0px));
+            left: calc(1rem + env(safe-area-inset-left, 0px));
+            right: calc(1rem + env(safe-area-inset-right, 0px));
             z-index: 10;
             display: flex;
             justify-content: space-between;
@@ -134,7 +146,11 @@
         #gameMenu.hidden { display: none; }
         #gameMenu .panel-sketch {
             max-width: 26rem; width: 100%;
+            max-height: calc(100dvh - 2rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             padding: 1.5rem 2rem;
+            padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
             text-align: center;
             transform: rotate(-1deg);
         }
@@ -180,10 +196,70 @@
         .howto b { color: #1f2937; }
         #startBtn { width: 100%; padding: 0.75rem; font-size: 1.5rem; }
         .buildtag { margin-top: 0.4rem; font-size: 0.75rem; color: #9ca3af; }
+        /* Multiplayer lobby: same notebook cards, 2D only */
+        #netBox { margin-top: 0.7rem; border-top: 2px dashed #d1d5db; padding-top: 0.6rem; text-align: left; }
+        #netBox input {
+            font-family: 'Patrick Hand', cursive; font-size: 16px;
+            border: 2px solid #2b2b2b; border-radius: 0.5rem;
+            padding: 0.3rem 0.5rem; width: 100%; margin: 0.2rem 0;
+            background: #fff; min-height: 44px;
+        }
+        #netRow { display: flex; gap: 0.4rem; }
+        #netRow .btn-sketch { flex: 1; padding: 0.4rem; font-size: 1.05rem; }
+        #netStatus { font-size: 0.85rem; color: #4b5563; min-height: 1.2em; margin-top: 0.25rem; }
+        #roomBadge {
+            display: none; pointer-events: auto; cursor: pointer;
+            font-family: 'Caveat', cursive; font-weight: 700; font-size: 1.2rem;
+            background: #fef9e7; border: 2px dashed #f5cf6b; border-radius: 0.6rem;
+            padding: 0.15rem 0.6rem; margin-left: 0.5rem;
+        }
+        #netBoard {
+            display: none; position: absolute; top: 4.2rem; right: 1rem; z-index: 10;
+            background: rgba(255,255,255,0.92); border: 2px solid #2b2b2b;
+            border-radius: 0.6rem; padding: 0.4rem 0.6rem; font-size: 0.82rem;
+            max-width: 11rem;
+        }
+        /* Big room code: shown on create so you can read it across the room */
+        #roomBig {
+            display: none; text-align: center; margin: 0.4rem 0;
+            background: #fef9e7; border: 3px dashed #2b2b2b; border-radius: 0.8rem;
+            padding: 0.35rem 0.5rem; cursor: pointer;
+        }
+        #roomBig b { font-family: 'Caveat', cursive; font-size: 2.4rem; letter-spacing: 0.35em; margin-left: 0.35em; }
+        #roomCount { display: block; font-size: 1.6rem !important; letter-spacing: 0.1em !important; margin-left: 0 !important; color: #4338ca; }
+        /* Lobby roster: ordered heads with names on top, who-is-here */
+        #netRoster { display: none; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin: 0.45rem 0 0.1rem; }
+        .netHead { text-align: center; min-width: 3rem; }
+        .netHead b { display: block; font-size: 0.78rem; color: #1f2937; max-width: 4.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .netFace { width: 30px; height: 30px; border-radius: 50%; border: 2.5px solid #2b2b2b; margin: 2px auto 0; position: relative; }
+        .netFace i { position: absolute; top: 7px; width: 7px; height: 9px; background: #fff; border-radius: 50%; border: 1px solid #111827; }
+        .netFace i.e1 { left: 5px; }
+        .netFace i.e2 { right: 5px; }
+        .netFace i::after { content: ''; display: block; width: 3px; height: 4px; background: #111827; border-radius: 50%; margin: 2px auto 0; }
+        #roomBig span { display: block; font-size: 0.8rem; color: #4b5563; }
 
         @media (prefers-reduced-motion: reduce) {
             .btn-sketch, .btn-sketch:hover, .btn-sketch:active { transform: none; transition: none; }
             #menuTitle { animation: none; }
+        }
+
+        /* Small phones + landscape: fit menu, keep buttons reachable */
+        #netBoard {
+            top: calc(4.2rem + env(safe-area-inset-top, 0px));
+            right: calc(1rem + env(safe-area-inset-right, 0px));
+        }
+        @media (max-height: 500px) {
+            #menuTitle { font-size: 1.6rem; }
+            #menuSubtitle { font-size: 0.95rem; margin: 0.4rem 0; }
+            .hint { display: none; }
+            .legend { display: none; }
+            .howto { display: none; }
+            #gameMenu .panel-sketch { padding: 0.8rem 1.2rem; }
+            #startBtn { padding: 0.5rem; font-size: 1.2rem; }
+        }
+        @media (max-width: 380px) {
+            .legend { grid-template-columns: repeat(2, 1fr); }
+            #menuTitle { font-size: 2.2rem; }
         }
     </style>
 </head>
@@ -201,11 +277,13 @@
                 <span class="caption">Best</span>
                 <span id="highScoreText" class="score-num" style="color:#d97706">0</span>
             </div>
+            <span id="roomBadge" title="tap to copy code">----</span>
         </div>
         <button id="soundBtn" class="btn-sketch" aria-label="Mute sound">
             <span id="soundIcon">ON</span>
         </button>
     </div>
+    <div id="netBoard"></div>
 
     <!-- Cover menu -->
     <div id="gameMenu">
@@ -233,6 +311,23 @@
                 <span><b>Climb</b> the planet carries you</span>
             </div>
             <button id="startBtn" class="btn-sketch btn-primary">START HOPPING!</button>
+            <div id="netBox">
+                <div class="caption">Multiplayer · same seed, fair race (max 10)</div>
+                <div id="roomBig" title="tap to copy"><b id="roomBigCode">----</b><b id="roomCount">0/10</b><span id="roomBigSub">tap to copy · max 10 players</span></div>
+                <div id="netRoster"></div>
+                <input id="netName" maxlength="14" placeholder="your name (ej: SENA)" />
+                <div id="netRow">
+                    <button id="netCreate" class="btn-sketch">+ Create</button>
+                    <button id="netJoin" class="btn-sketch">Join ➜</button>
+                </div>
+                <input id="netCode" maxlength="8" placeholder="room code (4 letras)" style="text-transform:uppercase" />
+                <div id="netRow2" style="display:flex;gap:0.4rem;margin-top:0.25rem">
+                    <button id="netReady" class="btn-sketch" style="flex:1;display:none">READY!</button>
+                    <button id="netRematch" class="btn-sketch" style="flex:1;display:none">REMATCH</button>
+                    <button id="netLeave" class="btn-sketch" style="flex:1;display:none">SALIR</button>
+                </div>
+                <div id="netStatus">solo mode — create or join with a code.</div>
+            </div>
             <div id="buildTag" class="buildtag"></div>
         </div>
     </div>
@@ -326,6 +421,8 @@
             PARALLAX: 0.25,
             ZONE_HEIGHT: 2000, // climb this many px to shift the sky a zone
             BIOME_EVERY: 5,   // planets climbed before the scenario changes
+            STREAK_EVERY: 3,  // clean landings in a row for a bonus
+            STREAK_BONUS: 2,  // extra points, same pencil popup style
         };
         var INK = '#2b2b2b';
         var FIGURE = '#1e293b';
@@ -334,13 +431,16 @@
         var PLANET_COLORS = ['#a8e6cf', '#ffd3b6', '#ffaaa5', '#c9b6e4', '#a8d8e6', '#d9c9a8'];
         // Canvas needs the font READY, otherwise it silently draws in a
         // generic serif and the score popups look cheap. Loaded in boot().
-        // Multiplayer endpoint. Defaults to the same host you loaded the
-        // page from, so a phone on the same Wi-Fi finds the server with no
-        // editing. Override with ?server=host:port when it lives elsewhere.
+        // Multiplayer endpoint. Same-origin by default so one public URL
+        // (Docker / Coolify) does page + socket with no extra ports.
+        // Local two-server dev (page :8901) still finds the relay on :8902.
+        // Override with ?server=host:port when it lives elsewhere.
         function netUrl() {
             var q = new URLSearchParams(location.search).get('server');
             if (q) return 'ws://' + q.replace(/^wss?:\/\//, '');
             var host = location.hostname || 'localhost';
+            if (location.port === '8901') return 'ws://' + host + ':8902';
+            if (location.host) return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
             return 'ws://' + host + ':8902';
         }
 
@@ -727,6 +827,7 @@
                 score: 0, highScore: best, viewW: w, viewH: h,
                 time: 0, nextIndex: 1, events: [],
                 planetsPassed: 0, // drives which scenario we are in
+                streak: 0, // clean landings in a row, 2D bonus only
                 biomeIndex: 0,
                 input: { held: false } // holding jump while airborne = gliding
             };
@@ -761,7 +862,6 @@
             g.events.push('jump');
             p.airborne = true;
             p.airTime = 0;
-            g.events.push('jump');
         }
 
         // Lives a cactus has at this altitude: one on the ground, up to three once
@@ -803,6 +903,7 @@
             }
             // Trap worlds: touching down is game over, no payout.
             if (planet.isTrap) {
+                g.streak = 0;
                 endRun(g);
                 return;
             }
@@ -811,6 +912,16 @@
                 // Galaxy tolls subtract; the score never dips below zero.
                 g.score = Math.max(0, g.score + planet.points);
                 g.events.push('land');
+                // Streak: only clean paying landings count. Tolls reset it.
+                if (planet.points >= 0 && !planet.isCactus) {
+                    g.streak = (g.streak || 0) + 1;
+                    if (g.streak % TUN.STREAK_EVERY === 0) {
+                        g.score += TUN.STREAK_BONUS;
+                        g.events.push('streak');
+                    }
+                } else {
+                    g.streak = 0;
+                }
                 // A new planet up = a new scenario every few climbs.
                 g.planetsPassed += 1;
                 var b = biomeInfo(g.planetsPassed);
@@ -863,6 +974,7 @@
                     if (Math.hypot(dx, dy) < TUN.PLAYER_R + TUN.STAR_R) {
                         planet.starCollected = true;
                         g.score += TUN.STAR_POINTS;
+                        g.lastStarPlanet = planet.id; // net: claim shared star by index
                         g.events.push('star');
                     }
                 }
@@ -894,8 +1006,10 @@
                     var ctipY = planet.y + Math.sin(cra) * (planet.radius + TUN.CACTUS_H);
                     if (segDist(p.x, p.y, cbx, cby, ctipX, ctipY) <
                         TUN.PLAYER_R + TUN.CACTUS_HIT) {
-                        g.score = Math.max(0, g.score - TUN.CACTUS_COST * planet.cactusCharges);
+                        g.lastDrain = TUN.CACTUS_COST * planet.cactusCharges;
+                        g.score = Math.max(0, g.score - g.lastDrain);
                         planet.cactusCharges = 0; // burned out
+                        g.streak = 0; // brushing it breaks the streak
                         g.events.push('drain');
                     }
                 }
@@ -2021,6 +2135,110 @@
             ctx.restore();
         }
 
+        // 2D pencil danger tell: tiny hand-drawn "!" above lethal worlds.
+        // Render-only, never touches the sim. Keeps the notebook look.
+        function drawDangerMarks(g) {
+            var i, pl, y, label = '';
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.font = '700 18px ' + CANVAS_FONT;
+            for (i = 0; i < g.planets.length; i++) {
+                pl = g.planets[i];
+                label = '';
+                if (pl.isTrap) label = '! dead';
+                else if (pl.isLava) label = '! hot';
+                else if (pl.isHole) label = '! hole';
+                else if (pl.isVolcano && volcanoPhase(pl) !== 'quiet') label = '!';
+                else if (pl.isLeech) label = '-pts';
+                else if (pl.isGalaxy) label = 'toll';
+                if (!label) continue;
+                y = pl.y - g.cameraY - pl.radius - 18;
+                if (y < -20 || y > g.viewH + 20) continue;
+                ctx.globalAlpha = 0.75;
+                ctx.fillStyle = (pl.isTrap || pl.isLava || pl.isHole) ? '#b91c1c' : '#92400e';
+                ctx.fillText(label, pl.x, y);
+            }
+            ctx.restore();
+        }
+
+        // 2D pencil ghosts: other players, same paper look. Render-only.
+        // Names live in a fixed list under the score counter (top-left),
+        // never in the middle of the play.
+        function drawGhosts(g) {
+            try {
+                if (typeof net === 'undefined' || !net.states || !net.active) return;
+            } catch (e) { return; }
+            var i, s, sy;
+            ctx.save();
+            for (i = 0; i < net.states.length; i++) {
+                s = net.states[i];
+                if (!s || s.id === net.myId) continue;
+                if (s.dead) continue;
+                sy = s.y - g.cameraY;
+                // Ghost doodle itself (no name on top of the action).
+                if (sy > -40 && sy < g.viewH + 40) {
+                    ctx.globalAlpha = 0.85;
+                    ctx.fillStyle = s.color || '#8B5CF6';
+                    ctx.beginPath();
+                    ctx.arc(s.x, sy, 11, 0, TAU);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                    ctx.strokeStyle = '#2b2b2b';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    // eyes, same doodle face
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(s.x - 3.5, sy - 2, 2.6, 0, TAU);
+                    ctx.arc(s.x + 3.5, sy - 2, 2.6, 0, TAU);
+                    ctx.fill();
+                    ctx.fillStyle = '#111827';
+                    ctx.beginPath();
+                    ctx.arc(s.x - 3.5, sy - 2, 1.2, 0, TAU);
+                    ctx.arc(s.x + 3.5, sy - 2, 1.2, 0, TAU);
+                    ctx.fill();
+                }
+            }
+            // Fixed rows under the counter, ordered by height:
+            // who is higher right now. Render-only.
+            var board = [];
+            try { board = (net.players || []).slice(); } catch (e) { board = []; }
+            board.sort(function (a, b) { return (b.alt || 0) - (a.alt || 0); });
+            ctx.textAlign = 'left';
+            ctx.font = '700 14px ' + CANVAS_FONT;
+            for (var n = 0; n < board.length && n < 10; n++) {
+                var ny = 104 + n * 22;
+                ctx.globalAlpha = 0.9;
+                ctx.fillStyle = board[n].color || '#8B5CF6';
+                ctx.beginPath();
+                ctx.arc(16, ny - 4, 6, 0, TAU);
+                ctx.fill();
+                ctx.strokeStyle = '#2b2b2b';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.globalAlpha = 0.85;
+                ctx.fillStyle = '#374151';
+                ctx.fillText((n + 1) + '. ' + String(board[n].name || '?').slice(0, 10) + ' ' + (board[n].alt || 0) + 'm', 27, ny);
+            }
+            ctx.restore();
+        }
+
+        // 2D tutorial card: only on the first 2 safe hops, fades after.
+        function drawTutorialHint(g) {
+            if (g.phase !== 'playing') return;
+            if ((g.planetsPassed || 0) > 1) return;
+            var msg = g.player.planet
+                ? 'tap / space = jump — timing steers you'
+                : 'hold in air = glide · land on the next planet';
+            ctx.save();
+            ctx.globalAlpha = 0.8;
+            ctx.textAlign = 'center';
+            ctx.font = "400 19px 'Patrick Hand', cursive";
+            ctx.fillStyle = '#374151';
+            ctx.fillText(msg, g.viewW / 2, g.viewH * 0.72);
+            ctx.restore();
+        }
+
         // Shooting star: crosses the sky every ~11 seconds, world-anchored.
         function drawShootingStar(g) {
             var span = g.viewW + 500;
@@ -2155,13 +2373,15 @@
                 drawPlanet(g.planets[i], g.cameraY, g.time, g.planets[i] === me);
             }
             if (me) drawSpinArrow(me);
-            if (me) drawSpinArrow(me);
             drawPlayer(g, f);
             drawGravityTugs(g);
+            drawDangerMarks(g);
+            drawGhosts(g);
             ctx.restore();
             drawRipplesAndTrail();
             drawParts();
             drawPopups();
+            drawTutorialHint(g);
             // Altitude meter, pencil-style, bottom-left out of the way.
             ctx.save();
             ctx.globalAlpha = 0.65;
@@ -2350,7 +2570,245 @@
         var width = 0, height = 0, lastTs = 0, jumpQueued = false, menuShown = true;
         var runBestAtStart = 0, celebratedBest = false;
         var holding = false; // jump held down: glides while airborne
-        var BUILD = 'v38';
+        var BUILD = 'v39-net1';
+
+        /* ---------------- Multiplayer: shared seed, access code, fair race ---
+           Same protocol as server/net-server.ts. Nobody advances early:
+           - room shares ONE seed, everyone rebuilds the same chain
+           - lobby holds until READY -> 'go' rebuilds everyone at once
+           - join mid-round waits for rematch, does not spawn ahead
+           - stars arbitrated by planet INDEX, medals by altitude (server)
+           Render-only ghosts: 2D pencil, never touch the sim. */
+        var net = {
+            ws: null, active: false, myId: null, myName: 'Player',
+            code: '', seed: 0, color: '#8B5CF6',
+            players: [], states: [], medals: [], started: false, over: false,
+            lastSend: 0, board: null, pendingOp: ''
+        };
+
+        function netSay(o) {
+            try { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); } catch (e) {}
+        }
+        function netStatus(msg) {
+            var el = document.getElementById('netStatus');
+            if (el) el.textContent = msg;
+        }
+        function netName() {
+            var el = document.getElementById('netName');
+            var n = el && el.value ? String(el.value).trim().slice(0, 14) : '';
+            return n;
+        }
+        function netNeedName() {
+            // Asks for the name first: no anonymous rooms.
+            if (netName()) return true;
+            netStatus('escribe tu nombre arriba primero 👆');
+            try {
+                var el = document.getElementById('netName');
+                if (el) el.focus();
+            } catch (e) {}
+            return false;
+        }
+        function netRoomCount() {
+            // Big live counter: how many joined out of 10.
+            try {
+                var rc = document.getElementById('roomCount');
+                if (rc && net.active) rc.textContent = net.players.length + '/10';
+                var rbs = document.getElementById('roomBigSub');
+                if (rbs && net.active) rbs.textContent = 'tap to copy · ' + net.players.length + '/10 unidos · SALIR abajo para salir';
+            } catch (e) {}
+        }
+        function netEsc(s) {
+            return String(s).slice(0, 14).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function netDrawRoster() {
+            // Ordered heads with names on top: see who is in the room.
+            var r = null;
+            try { r = document.getElementById('netRoster'); } catch (e) { return; }
+            if (!r) return;
+            if (!net.active || !net.players.length) { r.style.display = 'none'; r.innerHTML = ''; return; }
+            r.style.display = 'flex';
+            var h = '';
+            for (var n = 0; n < net.players.length; n++) {
+                h += '<div class="netHead"><b>' + netEsc(net.players[n].name) + '</b>' +
+                    '<div class="netFace" style="background:' + net.players[n].color + '"><i class="e1"></i><i class="e2"></i></div></div>';
+            }
+            r.innerHTML = h;
+        }
+        function netAlt() {
+            if (!world) return 0;
+            return Math.max(0, Math.round(-world.cameraY / 50));
+        }
+        function netConnect(next) {
+            if (net.ws && (net.ws.readyState === 0 || net.ws.readyState === 1)) { if (next) next(); return; }
+            var Ws = typeof WebSocket !== 'undefined' ? WebSocket : null;
+            if (!Ws) { netStatus('browser has no WebSocket — solo mode.'); return; }
+            try { net.ws = new Ws(netUrl()); } catch (e) { netStatus('cannot reach net server (bun run net :8902).'); return; }
+            netStatus('connecting…');
+            net.ws.onopen = function () { netSay({ t: 'hello' }); if (next) next(); };
+            net.ws.onmessage = netOnMsg;
+            net.ws.onclose = function () {
+                if (net.active) netStatus('disconnected — back to solo. (code was ' + net.code + ')');
+                net.active = false; net.started = false;
+                showNetButtons(false);
+            };
+            net.ws.onerror = function () { netStatus('net error — is `bun run net` on port 8902?'); };
+        }
+        function showNetButtons(inRoom) {
+            var r = document.getElementById('netReady'), m = document.getElementById('netRematch'), l = document.getElementById('netLeave');
+            if (r) r.style.display = inRoom && !net.started ? 'block' : 'none';
+            if (m) m.style.display = inRoom ? 'block' : 'none';
+            if (l) l.style.display = inRoom ? 'block' : 'none';
+            var b = document.getElementById('roomBadge');
+            if (b) { b.style.display = inRoom ? 'inline-block' : 'none'; if (inRoom) b.textContent = net.code || '----'; }
+            var rb = document.getElementById('roomBig');
+            if (rb) rb.style.display = inRoom ? 'block' : 'none';
+            var rbc = document.getElementById('roomBigCode');
+            if (rbc && inRoom) rbc.textContent = net.code || '----';
+            var nb = document.getElementById('netBoard');
+            if (nb) nb.style.display = inRoom ? 'block' : 'none';
+            // In a room the code box is useless: hide it, show it on leave.
+            try {
+                var nc = document.getElementById('netCode');
+                if (nc) nc.style.display = inRoom ? 'none' : 'block';
+            } catch (e) {}
+            netRoomCount();
+        }
+        function netOnMsg(ev) {
+            var m;
+            try { m = JSON.parse(ev.data); } catch (e) { return; }
+            if (!m || !m.t) return;
+            if (m.t === 'welcome') { net.myId = m.id; return; }
+            if (m.t === 'room') {
+                net.active = true; net.code = m.code; net.seed = m.seed;
+                net.myId = (m.you && m.you.id) || net.myId;
+                net.color = (m.you && m.you.color) || net.color;
+                net.started = !!m.started; net.over = false;
+                net.players = m.players || []; net.medals = m.medals || [];
+                var wasJoin = net.pendingOp === 'join';
+                net.pendingOp = '';
+                showNetButtons(true);
+                netDrawBoard();
+                try {
+                    var ci = document.getElementById('netCode');
+                    if (ci) ci.value = net.code;
+                    var rbc2 = document.getElementById('roomBigCode');
+                    if (rbc2) rbc2.textContent = net.code;
+                    var rbs = document.getElementById('roomBigSub');
+                    if (rbs) rbs.textContent = 'tap to copy · ' + net.players.length + '/10 · leave abajo para salir';
+                } catch (e) {}
+                // Join notice: clear banner + canvas popup so you know you are in.
+                if (world) {
+                    fx.banner = wasJoin ? 'JOINED ' + net.code + '!' : 'SALA ' + net.code;
+                    fx.bannerT = 2.6;
+                    popup(world.player.x, world.player.y - 60, wasJoin ? 'joined!' : 'sala lista!', '#15803d');
+                }
+                if (net.started) {
+                    // Fair: round already running — wait, do not spawn ahead.
+                    netStatus('¡Te uniste a ' + net.code + ' en plena ronda! Espera REMATCH · leave abajo para salir.');
+                    return;
+                }
+                // Fair: everyone rebuilds the SAME chain now, waits for READY/go.
+                resize();
+                world = createWorld(width, height, readBest(), net.seed);
+                world.phase = 'idle';
+                if (wasJoin) netStatus('¡Te uniste a la SALA ' + net.code + '! · ' + net.players.length + '/10 · pulsa READY o leave abajo para salir.');
+                else netStatus('SALA ' + net.code + ' creada · pasa el código · pulsa READY cuando estén listos · leave abajo para salir.');
+                return;
+            }
+            if (m.t === 'go') {
+                net.seed = m.seed; net.started = true; net.over = false;
+                startRunSeeded(net.seed);
+                netStatus('GO! room ' + net.code + ' · same planets for all.');
+                showNetButtons(true);
+                return;
+            }
+            if (m.t === 'players') {
+                net.players = m.players || []; net.medals = m.medals || [];
+                netDrawBoard();
+                return;
+            }
+            if (m.t === 'states') {
+                net.states = m.states || [];
+                // attach names/colors for ghosts
+                for (var i = 0; i < net.states.length; i++) {
+                    for (var j = 0; j < net.players.length; j++) {
+                        if (net.players[j].id === net.states[i].id) {
+                            net.states[i].name = net.players[j].name;
+                            net.states[i].color = net.players[j].color;
+                        }
+                    }
+                }
+                return;
+            }
+            if (m.t === 'starTaken') {
+                // Shared star: first grab wins. Grey it out for everyone.
+                if (world && world.planets) {
+                    for (var k = 0; k < world.planets.length; k++) {
+                        if (world.planets[k].id === m.planet) world.planets[k].starCollected = true;
+                    }
+                }
+                if (m.by && m.by !== net.myName && world && world.player) popup(world.player.x, world.player.y - 44, m.by + ' +5', '#6b7280');
+                netDrawBoard();
+                return;
+            }
+            if (m.t === 'medal') {
+                if (world && world.player) popup(world.player.x, world.player.y - 56, (m.place === 0 ? 'GOLD ' : m.place === 1 ? 'SILVER ' : 'BRONZE ') + (m.name || ''), '#b45309');
+                return;
+            }
+            if (m.t === 'over') {
+                net.over = true;
+                var pod = (m.podium || []).map(function (p) { return p.medal + ' ' + p.name + ' (' + p.alt + 'm)'; }).join(' · ');
+                showMenu('Round over!', pod || 'podium is empty — rematch?', 'KEEP HOPPING (solo)');
+                menuShown = true;
+                netStatus('round over · ' + pod + ' · press REMATCH for a fair restart.');
+                showNetButtons(true);
+                return;
+            }
+            if (m.t === 'reset') {
+                net.seed = m.seed; net.over = false; net.started = false;
+                resize();
+                world = createWorld(width, height, readBest(), net.seed);
+                world.phase = 'idle';
+                netStatus('room ' + net.code + ' · new seed · press READY!');
+                showNetButtons(true);
+                return;
+            }
+            if (m.t === 'bye') { netDrawBoard(); return; }
+            if (m.t === 'error') { netStatus(m.message || 'net error'); return; }
+        }
+        function netDrawBoard() {
+            var el = document.getElementById('netBoard');
+            if (!el) return;
+            if (!net.active) { el.style.display = 'none'; netDrawRoster(); return; }
+            var h = '<b>' + net.code + '</b> · ' + net.players.length + '/10<br>';
+            var sorted = net.players.slice().sort(function (a, b) { return (b.alt || 0) - (a.alt || 0); });
+            for (var i = 0; i < sorted.length; i++) {
+                h += (i + 1) + '. <span style="color:' + sorted[i].color + '">●</span> ' +
+                    String(sorted[i].name).slice(0, 12) + ' ' + (sorted[i].alt || 0) + 'm<br>';
+            }
+            el.innerHTML = h;
+            netRoomCount();
+            netDrawRoster();
+        }
+        function netTick(now) {
+            if (!net.active || !net.started || net.over) return;
+            if (!world || world.phase !== 'playing') return;
+            if (now - net.lastSend < 100) return; // 10/s like the server
+            net.lastSend = now;
+            var p = world.player;
+            netSay({
+                t: 'pos',
+                x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10,
+                alt: netAlt(),
+                planet: p.planet ? p.planet.id : null,
+                angle: 0, air: !p.planet, score: world.score,
+                dead: world.phase !== 'playing'
+            });
+            if (world.lastStarPlanet !== undefined && world.lastStarPlanet !== null) {
+                netSay({ t: 'star', planet: world.lastStarPlanet });
+                world.lastStarPlanet = null;
+            }
+        }
 
         function readBest() {
             try { return Number(localStorage.getItem(STORE_KEY)) || 0; }
@@ -2370,9 +2828,15 @@
         }
 
         function startRun() {
+            startRunSeeded(randomSeed());
+            // solo hop leaves any room quietly (no error spam)
+            if (net.active) { try { if (net.ws) net.ws.close(); } catch (e) {} net.active = false; net.started = false; showNetButtons(false); }
+        }
+
+        function startRunSeeded(seed) {
             sound.init();
             resize(); // fresh dimensions: rotation, late load, race-proof
-            world = createWorld(width, height, readBest(), randomSeed());
+            world = createWorld(width, height, readBest(), seed);
             jumpQueued = false;
             lastTs = 0;
             menuShown = false;
@@ -2390,6 +2854,17 @@
             gameMenu.classList.add('hidden');
         }
 
+        function netRespawn() {
+            // Climb again with the SAME seed and KEEP the points:
+            // no ceiling, they pile up all round long.
+            var s = world ? world.score : 0;
+            var h = world ? world.highScore : readBest();
+            startRunSeeded(net.seed);
+            world.score = s;
+            if (world.highScore < h) world.highScore = h;
+            scoreText.textContent = String(s);
+        }
+
         function showMenu(title, subtitle, button) {
             menuTitle.textContent = title;
             menuSubtitle.textContent = subtitle;
@@ -2405,11 +2880,23 @@
         }
 
         function gameOver() {
+            // Net mode: nobody is eliminated — climb again, same seed.
+            if (net.active && net.started && !net.over) {
+                showMenu('Ouch! Keep climbing!',
+                    'room ' + net.code + ' · score ' + world.score + ' · best height counts, tap to go again.',
+                    'CLIMB AGAIN');
+                menuShown = true;
+                return;
+            }
             // Shown with a delay from the frame loop: the death plays first.
             showMenu('Oh no! Game Over 😵',
                 'You scored ' + world.score + ' points on your star adventure.',
                 'TRY AGAIN');
             menuShown = true;
+        }
+
+        function buzz(ms) {
+            try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {}
         }
 
         function playEvent(e) {
@@ -2424,6 +2911,11 @@
                 // New scenario: a banner so you notice the world changed.
                 fx.banner = biomeInfo(world.planetsPassed).name;
                 fx.bannerT = 2.6;
+            } else if (e === 'streak') {
+                // 2D-only reward: clean streak bonus, same pencil popup.
+                sound.star();
+                popup(p.x, p.y - 52, 'streak +' + TUN.STREAK_BONUS, '#15803d');
+                puff(p.x, p.y, 6, '#86efac', 170);
             } else if (e === 'jump') {
                 sound.jump();
                 puff(p.x, p.y + TUN.PLAYER_R, 10, '#b9b09a', 220);
@@ -2432,6 +2924,7 @@
                 fx.shake = Math.max(fx.shake, 1.5);
             } else if (e === 'land') {
                 sound.land();
+                buzz(12);
                 var purse = p.planet ? p.planet.points : 0;
                 popup(p.x, p.y - 30, (purse >= 0 ? '+' : '') + purse,
                     purse >= 0 ? '#4338ca' : '#b91c1c');
@@ -2448,12 +2941,14 @@
                 fx.shake = Math.max(fx.shake, 1.5);
             } else if (e === 'drain') {
                 sound.drain();
-                var burn = p.planet ? TUN.CACTUS_COST * p.planet.cactusCharges : TUN.CACTUS_COST;
+                buzz(30);
+                var burn = world.lastDrain || TUN.CACTUS_COST;
                 popup(p.x, p.y - 34, '-' + burn, '#b45309');
                 puff(p.x, p.y, 8, '#8fbf7f', 180);
                 fx.shake = Math.max(fx.shake, 2);
             } else if (e === 'die') {
                 sound.hit();
+                buzz([40, 40, 60]);
                 puff(p.x, p.y, 14, INK, 260);
                 fx.shake = 6;
                 fx.dieT = 0;
@@ -2503,19 +2998,31 @@
                 popup(world.player.x, world.player.y - 44, 'NEW BEST!', '#b45309');
                 confetti(world.player.x, world.player.y - 20);
             }
+            netTick(ts);
             drawScene(world, fx);
         }
 
         window.addEventListener('resize', resize);
+        function pressAction() {
+            // Fair-race guard: in a room, never solo-start with a random seed.
+            if (net.active) {
+                if (net.over) { startRun(); return; } // podium button = solo again
+                if (!net.started) return; // wait for READY -> go
+                if (!world || world.phase !== 'playing') { netRespawn(); return; }
+                jumpQueued = true; return;
+            }
+            if (!world || world.phase !== 'playing') startRun();
+            else jumpQueued = true;
+        }
         window.addEventListener('keydown', function (e) {
             if (e.code === 'Space' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
                 e.preventDefault();
                 if (e.repeat) return;
                 holding = true;
-                if (!world || world.phase !== 'playing') startRun();
-                else jumpQueued = true;
+                pressAction();
             } else if (e.key === 'r' || e.key === 'R') {
-                startRun();
+                if (net.active && net.started && !net.over) netRespawn();
+                else startRun();
             }
         });
         window.addEventListener('keyup', function (e) {
@@ -2524,19 +3031,101 @@
         canvas.addEventListener('pointerdown', function (e) {
             e.preventDefault();
             holding = true;
-            if (!world || world.phase !== 'playing') startRun();
-            else jumpQueued = true;
+            pressAction();
         });
         function releaseHold(e) { if (e) e.preventDefault(); holding = false; }
         canvas.addEventListener('pointerup', releaseHold);
         canvas.addEventListener('pointerleave', releaseHold);
         canvas.addEventListener('pointercancel', releaseHold);
-        startBtn.addEventListener('click', startRun);
+        // 2D-safe pause: tab hidden or window blurred = stop gliding, drop
+        // queued jump so you never die on return. dt is already capped.
+        try {
+            if (document.addEventListener) document.addEventListener('visibilitychange', function () {
+                if (document.hidden) { holding = false; jumpQueued = false; lastTs = 0; }
+            });
+        } catch (e) {}
+        window.addEventListener('blur', function () { holding = false; jumpQueued = false; });
+        startBtn.addEventListener('click', function () {
+            // Same fair guard as space/tap: in lobby START = READY, never solo.
+            if (net.active && !net.over && !net.started) { netSay({ t: 'ready' }); netStatus('ready! waiting for GO…'); return; }
+            if (net.active && !net.over && net.started) { netRespawn(); return; }
+            startRun();
+        });
         soundBtn.addEventListener('click', function () {
             sound.enabled = !sound.enabled;
             soundIcon.textContent = sound.enabled ? 'ON' : 'OFF';
             soundBtn.setAttribute('aria-label', sound.enabled ? 'Mute sound' : 'Unmute sound');
         });
+        // Net lobby wiring: access code is the anti-desync lock.
+        try {
+            var netCreate = document.getElementById('netCreate');
+            var netJoin = document.getElementById('netJoin');
+            var netReady = document.getElementById('netReady');
+            var netRematch = document.getElementById('netRematch');
+            var netLeave = document.getElementById('netLeave');
+            var roomBadge = document.getElementById('roomBadge');
+            if (netCreate) netCreate.addEventListener('click', function () {
+                if (net.active) { netStatus('already in room ' + net.code + ' — leave first.'); return; }
+                if (!netNeedName()) return;
+                net.myName = netName();
+                net.pendingOp = 'create';
+                try {
+                    var nc0 = document.getElementById('netCode');
+                    if (nc0) { nc0.value = ''; nc0.style.display = 'none'; }
+                } catch (e) {}
+                netConnect(function () { netSay({ t: 'create', name: net.myName }); });
+                netStatus('creating room…');
+            });
+            if (netJoin) netJoin.addEventListener('click', function () {
+                if (net.active) { netStatus('already in room ' + net.code + ' — leave first.'); return; }
+                if (!netNeedName()) return;
+                net.myName = netName();
+                var c = document.getElementById('netCode');
+                var code = c && c.value ? String(c.value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) : '';
+                if (!code) { netStatus('write the 4-letter code first.'); return; }
+                net.pendingOp = 'join';
+                netConnect(function () { netSay({ t: 'join', code: code, name: net.myName }); });
+                netStatus('joining ' + code + '…');
+            });
+            try {
+                var codeInput = document.getElementById('netCode');
+                if (codeInput) codeInput.addEventListener('input', function () {
+                    codeInput.value = String(codeInput.value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+                });
+            } catch (e) {}
+            if (netReady) netReady.addEventListener('click', function () {
+                netSay({ t: 'ready' });
+                netStatus('ready! waiting for GO…');
+            });
+            if (netRematch) netRematch.addEventListener('click', function () {
+                netSay({ t: 'rematch' });
+                netStatus('new seed requested…');
+            });
+            if (netLeave) netLeave.addEventListener('click', function () {
+                var oldCode = net.code;
+                try { if (net.ws) net.ws.close(); } catch (e) {}
+                net.active = false; net.started = false; net.over = false;
+                net.players = []; net.states = []; net.code = ''; net.pendingOp = '';
+                showNetButtons(false);
+                netDrawBoard();
+                netStatus(oldCode ? 'saliste de la sala ' + oldCode + ' · solo mode.' : 'solo mode — create or join with a code.');
+            });
+            if (roomBadge) roomBadge.addEventListener('click', function () {
+                try {
+                    if (navigator.clipboard) navigator.clipboard.writeText(net.code);
+                    netStatus('code ' + net.code + ' copied — share it!');
+                } catch (e) { netStatus('code: ' + net.code); }
+            });
+            try {
+                var roomBig = document.getElementById('roomBig');
+                if (roomBig) roomBig.addEventListener('click', function () {
+                    try {
+                        if (navigator.clipboard) navigator.clipboard.writeText(net.code);
+                        netStatus('code ' + net.code + ' copied — shout it across the room!');
+                    } catch (e) { netStatus('code: ' + net.code); }
+                });
+            } catch (e) {}
+        } catch (e) {}
 
         function boot() {
             if (world) return; // already up
