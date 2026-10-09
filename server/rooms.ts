@@ -37,7 +37,7 @@
  */
 
 // Room size + pacing. Bump MAX_PLAYERS only with matching client colors.
-export const MAX_PLAYERS = 10;
+export const MAX_PLAYERS = 5;
 export const POS_PER_SECOND = 10;
 /** Altitude in metres (the client counts 50 world px as one metre). */
 export const MEDALS = [40, 80, 120];
