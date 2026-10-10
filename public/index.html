@@ -3005,6 +3005,7 @@
             learningTitle.textContent = mode === 'death' ? 'Translate to revive!' : 'English challenge · ' + milestone + ' points';
             learningPrompt.textContent = activeChallenge.question.prompt;
             learningAnswer.value = '';
+            learningAnswer.placeholder = activeChallenge.question.answerLanguage === 'en' ? 'Write your answer in English' : 'Write your answer in Spanish';
             learningFeedback.textContent = '';
             learningSubmit.textContent = mode === 'death' ? 'CHECK & REVIVE' : 'CHECK ANSWER';
             learningOverlay.hidden = false;
