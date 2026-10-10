@@ -5,7 +5,16 @@ describe('English learning helpers', () => {
   test('contains separate A2 and B1 banks and returns level-appropriate prompts', () => {
     expect(englishLearning.banks.A2.length).toBeGreaterThanOrEqual(10)
     expect(englishLearning.banks.B1.length).toBeGreaterThanOrEqual(10)
+    expect(englishLearning.banks.A2.some((question: any) => question.answerLanguage === 'en')).toBe(true)
+    expect(englishLearning.banks.B1.some((question: any) => question.answerLanguage === 'en')).toBe(true)
+    expect(englishLearning.banks.A2.some((question: any) => !question.answerLanguage)).toBe(true)
     expect(englishLearning.createSession('B1', () => 0).level).toBe('B1')
+  })
+
+  test('accepts English grammar and vocabulary answers as well as Spanish translations', () => {
+    const grammarQuestion = englishLearning.banks.A2.find((question: any) => question.answerLanguage === 'en')!
+    expect(englishLearning.isCorrect(grammarQuestion, grammarQuestion.answers[0].toUpperCase())).toBe(true)
+    expect(englishLearning.isCorrect(grammarQuestion, 'wrong answer')).toBe(false)
   })
 
   test('normalizes accents, case, punctuation, and whitespace for answers', () => {
