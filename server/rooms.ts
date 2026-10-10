@@ -15,9 +15,9 @@
  *    - Stars are shared: a star on planet #N is worth +5 to whoever grabs
  *      it first. Server arbitrates by planet INDEX, so it works even when
  *      players have different screen sizes.
- *    - Medals by altitude (40m / 80m / 120m), awarded live. The round ends
- *      when someone takes gold, and everyone who earned a medal keeps it.
- *      Falling just means you climb again — you are never out.
+ *    - Medals by altitude (40m / 80m / 120m), awarded live. Rounds last five
+ *      minutes, then every player is ranked by score. Falling just means you
+ *      climb again — you are never out.
  *
  *  Planets are never transmitted: same seed + same index = same planet.
  *
@@ -25,14 +25,14 @@
  *   C->S  {t:'hello'}                     -> S {t:'welcome', id}
  *   C->S  {t:'create', name}              -> S {t:'room', code, seed, ...}
  *   C->S  {t:'join', code, name}          -> S {t:'room', ...} | {t:'error', message}
- *   C->S  {t:'ready'}                     -> S {t:'go'}  (round starts)
+ *   C->S  {t:'ready'}                     -> S {t:'go', seed, durationMs}
  *   C->S  {t:'pos', x, y, alt, planet, angle, air, score}
  *                                         -> S {t:'states', states:[...]}
  *   C->S  {t:'star', planet}              -> S {t:'starTaken', planet, by, score}
  *   C->S  {t:'rematch'}                   -> S {t:'reset'}
  *   S->*  {t:'players', players:[{id,name,color,score,alt,medal}]}
  *   S->*  {t:'medal', place, id, name}
- *   S->*  {t:'over', podium:[{place,id,name,score,alt}]}
+ *   S->*  {t:'over', reason:'time', podium:[{place,id,name,score,alt}]}
  *   S->*  {t:'bye', id}
  */
 
