@@ -121,8 +121,11 @@ bun run test
 ```
 
 Runs the real game script headlessly: jump physics, planetary attraction, all
-ten planet types, the burn-out cactus, scenario changes, determinism and a
-no-`NaN` sweep across dozens of seeds.
+ten planet types, scenario changes, determinism, English challenge integration,
+answer normalization, question shuffling and score milestones. Server tests
+cover the five-player limit, owner-only round controls, the five-minute timer,
+score updates, final ranking and rematches. The timer deadline is tested with
+an injected timestamp rather than waiting five minutes.
 
 ## License
 

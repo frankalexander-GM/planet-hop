@@ -9,7 +9,7 @@
     "net": "bun server/net-server.ts",
     "web": "bun server/web.ts",
     "start": "bun server/web.ts",
-    "test": "bun tests/run.ts"
+    "test": "bun tests/run.ts && bun test tests/english.test.ts tests/rooms.test.ts"
   },
   "engines": {
     "bun": ">=1.0.0"

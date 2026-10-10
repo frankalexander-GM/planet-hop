@@ -2813,7 +2813,7 @@
             var sorted = net.players.slice().sort(function (a, b) { return (b.alt || 0) - (a.alt || 0); });
             for (var i = 0; i < sorted.length; i++) {
                 h += (i + 1) + '. <span style="color:' + sorted[i].color + '">●</span> ' +
-                    String(sorted[i].name).slice(0, 12) + ' ' + (sorted[i].alt || 0) + 'm<br>';
+                    netEsc(sorted[i].name).slice(0, 12) + ' ' + (sorted[i].alt || 0) + 'm<br>';
             }
             el.innerHTML = h;
             netRoomCount();
