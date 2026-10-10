@@ -11,6 +11,7 @@
 import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
+import englishLearning from '../public/english-learning.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const GAME = join(here, '..', 'public', 'index.html')
@@ -56,6 +57,7 @@ globalThis.window = {
   devicePixelRatio: 2,
   addEventListener() {},
 }
+;(globalThis as any).PlanetHopEnglish = englishLearning
 globalThis.localStorage = {
   getItem: () => { throw new Error('denied') },
   setItem: () => { throw new Error('denied') },
@@ -175,6 +177,49 @@ const checks = `
   }
   ck('deterministic per seed',
     snap(createWorld(500, 600, 0, 7777)) === snap(createWorld(500, 600, 0, 7777)));
+
+  // --- English challenge integration ---
+  world = createWorld(500, 600, 0, 9090);
+  world.phase = 'playing';
+  jumpQueued = false;
+  openLearningChallenge('milestone', 300);
+  ck('milestone opens the English overlay', learningOverlay.hidden === false);
+  pressAction();
+  ck('movement controls are blocked during a question', jumpQueued === false);
+  learningAnswer.value = activeChallenge.question.answers[0];
+  submitLearningAnswer();
+  ck('a correct milestone answer is accepted without ending the run', activeChallenge.submitted && world.phase === 'playing');
+  net.active = true; net.started = true; net.roundEndsAt = 305000;
+  var originalDateNow = Date.now;
+  Date.now = function () { return 1000; };
+  updateRoundTimer();
+  var timerBeforeAnswer = byId('roundTimer').textContent;
+  Date.now = function () { return 6000; };
+  updateRoundTimer();
+  ck('room countdown continues while the English question is open', timerBeforeAnswer === '05:04' && byId('roundTimer').textContent === '04:59');
+  Date.now = originalDateNow;
+  net.active = false; net.started = false; net.roundEndsAt = 0;
+  submitLearningAnswer();
+  ck('answering lets the player continue', activeChallenge === null && learningOverlay.hidden === true);
+  ck('player names are escaped before entering live leaderboard HTML', netEsc('<img src=x>') === '&lt;img src=x&gt;');
+
+  world = createWorld(500, 600, 0, 9091);
+  world.score = 77;
+  reviveCheckpoint = cloneGameState(world);
+  world.phase = 'over';
+  openLearningChallenge('death');
+  learningAnswer.value = activeChallenge.question.answers[0];
+  submitLearningAnswer();
+  ck('a correct death translation revives at the checkpoint with score preserved', world.phase === 'playing' && world.score === 77 && world.player.planet === world.planets[0]);
+
+  world = createWorld(500, 600, 0, 9092);
+  world.score = 120;
+  world.phase = 'over';
+  reviveCheckpoint = cloneGameState(world);
+  openLearningChallenge('death');
+  learningAnswer.value = 'respuesta equivocada';
+  submitLearningAnswer();
+  ck('an incorrect death translation leaves the player dead and offers a fresh run', world.phase === 'over' && startBtn.textContent === 'START FROM ZERO' && learningOverlay.hidden === true);
 
   // --- it actually paints ---
   var drew = 0;
