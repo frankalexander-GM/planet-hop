@@ -406,6 +406,7 @@
             GAP_MAX: 250,
             SPIN_MIN: 1.0,     // full turns you can feel
             SPIN_MAX: 1.4,
+            NET_SPIN_MAX: 1.6,  // shared landings must not compound into frantic spins
             SEED_COUNT: 6,
             LAND_TOLERANCE: 8,   // grazes still catch: forgiving shell
             LAND_GRACE: 0.15,    // no landing right after take-off
@@ -900,6 +901,13 @@
             return 'quiet';
         }
 
+        function nextPlanetSpin(speed, kick) {
+            var sign = speed < 0 ? 1 : -1;
+            var accelerated = Math.abs(speed) * (1 + kick);
+            var inRoom = typeof net !== 'undefined' && net.active;
+            return sign * Math.min(accelerated, inRoom ? TUN.NET_SPIN_MAX : Infinity);
+        }
+
         function landOn(g, planet, worldAngle) {
             var p = g.player;
             p.planet = planet;
@@ -914,7 +922,7 @@
             // Touching a NEW planet kicks its spin over to the other way and
             // speeds it up: the ground you just arrived on always turns the
             // opposite way from now on.
-            planet.rotationSpeed = -planet.rotationSpeed * (1 + planet.flipKick);
+            planet.rotationSpeed = nextPlanetSpin(planet.rotationSpeed, planet.flipKick);
             planet.lastFlipN = (planet.lastFlipN || 0) + 1;
             // Net: share the flip so every screen rotates together.
             g.lastFlip = { planet: planet.id, rot: planet.rotation, speed: planet.rotationSpeed };
@@ -2702,7 +2710,7 @@
                         var cur = hit.lastFlipN || 0;
                         if (m.n > cur) {
                             for (var q = cur; q < m.n; q++) {
-                                hit.rotationSpeed = -hit.rotationSpeed * (1 + hit.flipKick);
+                                hit.rotationSpeed = nextPlanetSpin(hit.rotationSpeed, hit.flipKick);
                             }
                             hit.lastFlipN = m.n;
                             if (isFinite(m.rot)) hit.rotation = m.rot;
@@ -2800,7 +2808,7 @@
                 var cur = pl.lastFlipN || 0;
                 if (pend.n > cur) {
                     for (var q = cur; q < pend.n; q++) {
-                        pl.rotationSpeed = -pl.rotationSpeed * (1 + pl.flipKick);
+                        pl.rotationSpeed = nextPlanetSpin(pl.rotationSpeed, pl.flipKick);
                     }
                     pl.lastFlipN = pend.n;
                 }
