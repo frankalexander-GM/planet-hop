@@ -14,7 +14,10 @@
             { prompt: 'Translate: “I have never eaten Japanese food.”', answers: ['nunca he comido comida japonesa', 'jamás he comido comida japonesa'] },
             { prompt: 'Translate: “Could you open the window, please?”', answers: ['podrías abrir la ventana por favor', 'puedes abrir la ventana por favor', 'podría abrir la ventana por favor'] },
             { prompt: 'Translate: “They were at home yesterday.”', answers: ['ellos estaban en casa ayer', 'ellas estaban en casa ayer', 'estaban en casa ayer'] },
-            { prompt: 'Translate: “I need a bigger bottle of water.”', answers: ['necesito una botella de agua más grande', 'necesito una botella más grande de agua'] }
+            { prompt: 'Translate: “I need a bigger bottle of water.”', answers: ['necesito una botella de agua más grande', 'necesito una botella más grande de agua'] },
+            { prompt: 'Complete the sentence: “She ___ to school every day.”', answers: ['goes'], answerLanguage: 'en' },
+            { prompt: 'Complete the sentence: “There ___ three chairs in the kitchen.”', answers: ['are'], answerLanguage: 'en' },
+            { prompt: 'What is the past tense of “buy”?', answers: ['bought'], answerLanguage: 'en' }
         ],
         B1: [
             { prompt: 'Translate: “If it rains tomorrow, we will stay at home.”', answers: ['si llueve mañana nos quedaremos en casa', 'si mañana llueve nos quedaremos en casa', 'si llueve mañana nos quedamos en casa'] },
@@ -28,7 +31,10 @@
             { prompt: 'Translate: “The meeting was cancelled because the manager was ill.”', answers: ['la reunión fue cancelada porque el gerente estaba enfermo', 'cancelaron la reunión porque el gerente estaba enfermo', 'la reunión se canceló porque el gerente estaba enfermo'] },
             { prompt: 'Translate: “I have not decided where to spend my holidays yet.”', answers: ['todavía no he decidido dónde pasar mis vacaciones', 'aún no he decidido dónde pasar mis vacaciones'] },
             { prompt: 'Translate: “She asked me whether I could help her.”', answers: ['ella me preguntó si podía ayudarla', 'me preguntó si podía ayudarla', 'ella me preguntó si podía ayudarle'] },
-            { prompt: 'Translate: “Despite being tired, they continued working.”', answers: ['a pesar de estar cansados continuaron trabajando', 'aunque estaban cansados siguieron trabajando', 'a pesar de que estaban cansados continuaron trabajando'] }
+            { prompt: 'Translate: “Despite being tired, they continued working.”', answers: ['a pesar de estar cansados continuaron trabajando', 'aunque estaban cansados siguieron trabajando', 'a pesar de que estaban cansados continuaron trabajando'] },
+            { prompt: 'Complete the sentence: “If I ___ more time, I would learn another language.”', answers: ['had'], answerLanguage: 'en' },
+            { prompt: 'Complete the sentence: “Although she was tired, she ___ working.”', answers: ['continued'], answerLanguage: 'en' },
+            { prompt: 'Complete the sentence: “I have lived here ___ 2020.”', answers: ['since'], answerLanguage: 'en' }
         ]
     };
 
