@@ -2993,7 +2993,13 @@
             quizLevel.value = level;
             englishLevel.value = level;
             var session = sessionForSelectedLevel();
-            activeChallenge = { mode: mode, milestone: milestone || 0, question: session.next(), submitted: false };
+            activeChallenge = {
+                mode: mode,
+                milestone: milestone || 0,
+                scoreAtDeath: mode === 'death' && world ? Math.max(0, Number(world.score) || 0) : null,
+                question: session.next(),
+                submitted: false
+            };
             learningTitle.textContent = mode === 'death' ? 'Translate to revive!' : 'English challenge · ' + milestone + ' points';
             learningPrompt.textContent = activeChallenge.question.prompt;
             learningAnswer.value = '';
@@ -3017,12 +3023,11 @@
             var correct = englishApi.isCorrect(activeChallenge.question, learningAnswer.value);
             activeChallenge.submitted = true;
             var penalty = 0;
-            if (!correct && world) {
-                var penaltyMilestone = activeChallenge.mode === 'milestone'
-                    ? activeChallenge.milestone
-                    : (world.score > 0 ? Math.max(300, Math.floor(world.score / 300) * 300) : 0);
-                penalty = englishApi.milestonePenalty(penaltyMilestone, 300, 10);
-                world.score = Math.max(0, world.score - penalty);
+            if (!correct && activeChallenge.mode === 'milestone' && world) {
+                penalty = englishApi.milestonePenalty(activeChallenge.milestone, 300, 10);
+                var scoreBeforePenalty = Math.max(0, Number(world.score) || 0);
+                penalty = Math.min(penalty, scoreBeforePenalty);
+                world.score = scoreBeforePenalty - penalty;
                 scoreText.textContent = String(world.score);
             }
             if (activeChallenge.mode === 'death') {
@@ -3039,11 +3044,13 @@
                         netRespawn();
                         return;
                     }
-                    var penaltyText = penalty ? ' -' + penalty + ' points.' : '';
-                    showMenu('Game over 😵', 'Incorrect translation.' + penaltyText + ' Your next run starts from zero.', 'START FROM ZERO');
+                    showMenu('Game over 😵', 'Incorrect translation. Your next run starts from zero.', 'START FROM ZERO');
                     return;
                 }
+                var scoreAtDeath = activeChallenge.scoreAtDeath;
+                var reviveScore = Math.max(0, (Number(scoreAtDeath) || 0) - 50);
                 world = cloneGameState(reviveCheckpoint || createWorld(width, height, readBest(), randomSeed()));
+                world.score = reviveScore;
                 world.phase = 'playing';
                 world.events = [];
                 world.input = { held: false };
@@ -3051,8 +3058,10 @@
                     net.spectating = null;
                     net.deathSent = false;
                     netSay({ t: 'sync' });
-                    netStatus('¡Respuesta correcta! Reviviste en tu último planeta seguro · sala ' + net.code + '.');
+                    netStatus('¡Respuesta correcta! Reviviste en tu último planeta seguro · tarifa 50 puntos · sala ' + net.code + '.');
                 }
+                fx.banner = 'REVIVED · -50 POINTS';
+                fx.bannerT = 2.6;
                 scoreText.textContent = String(world.score);
                 highScoreText.textContent = String(world.highScore);
                 menuShown = false;
@@ -3065,7 +3074,7 @@
             }
             learningFeedback.textContent = correct
                 ? 'Correct! Keep climbing.'
-                : 'Not quite. -' + penalty + ' points. Correct answer: ' + activeChallenge.question.answers[0] + '.';
+                : 'Not quite. -' + penalty + ' points · score now ' + world.score + '. Correct answer: ' + activeChallenge.question.answers[0] + '.';
             learningFeedback.style.color = correct ? '#15803d' : '#b91c1c';
             learningSubmit.textContent = milestoneQueue.length ? 'CONTINUE' : 'CONTINUE PLAYING';
         }
