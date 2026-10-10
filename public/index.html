@@ -3024,11 +3024,21 @@
             if (activeChallenge.submitted) { continueAfterLearning(); return; }
             var correct = englishApi.isCorrect(activeChallenge.question, learningAnswer.value);
             activeChallenge.submitted = true;
+            var penalty = 0;
+            if (!correct && world) {
+                var penaltyMilestone = activeChallenge.mode === 'milestone'
+                    ? activeChallenge.milestone
+                    : (world.score > 0 ? Math.max(300, Math.floor(world.score / 300) * 300) : 0);
+                penalty = englishApi.milestonePenalty(penaltyMilestone, 300, 10);
+                world.score = Math.max(0, world.score - penalty);
+                scoreText.textContent = String(world.score);
+            }
             if (activeChallenge.mode === 'death') {
                 if (!correct) {
                     activeChallenge = null;
                     learningOverlay.hidden = true;
-                    showMenu('Game over 😵', 'Incorrect translation. Your next run starts from zero.', 'START FROM ZERO');
+                    var penaltyText = penalty ? ' -' + penalty + ' points.' : '';
+                    showMenu('Game over 😵', 'Incorrect translation.' + penaltyText + ' Your next run starts from zero.', 'START FROM ZERO');
                     return;
                 }
                 world = cloneGameState(reviveCheckpoint || createWorld(width, height, readBest(), randomSeed()));
@@ -3044,12 +3054,6 @@
                 learningOverlay.hidden = true;
                 activeChallenge = null;
                 return;
-            }
-            var penalty = 0;
-            if (!correct && activeChallenge.mode === 'milestone' && world) {
-                penalty = englishApi.milestonePenalty(activeChallenge.milestone, 300, 10);
-                world.score = Math.max(0, world.score - penalty);
-                scoreText.textContent = String(world.score);
             }
             learningFeedback.textContent = correct
                 ? 'Correct! Keep climbing.'
