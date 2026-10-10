@@ -3036,6 +3036,16 @@
         }
 
         window.addEventListener('resize', resize);
+        function isTypingTarget(target) {
+            if (!target) return false;
+            if (target.closest && target.closest('input, textarea, select')) return true;
+            if (target.isContentEditable) return true;
+            var active = document.activeElement;
+            if (active && (active === target || active === document.body)) {
+                return active && (active.matches && active.matches('input, textarea, select')) || active.isContentEditable;
+            }
+            return false;
+        }
         function pressAction() {
             // Fair-race guard: in a room, never solo-start with a random seed.
             if (net.active) {
@@ -3048,6 +3058,9 @@
             else jumpQueued = true;
         }
         window.addEventListener('keydown', function (e) {
+            if (isTypingTarget(e.target) || (document.activeElement && ((document.activeElement.matches && document.activeElement.matches('input, textarea, select')) || document.activeElement.isContentEditable))) {
+                return;
+            }
             if (e.code === 'Space' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
                 e.preventDefault();
                 if (e.repeat) return;
