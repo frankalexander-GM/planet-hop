@@ -40,38 +40,6 @@
 export const MAX_PLAYERS = 5;
 export const POS_PER_SECOND = 10;
 
-/* ============================================================
-   ENGLISH LEARNING — A2 and B1 phrase banks
-   ============================================================ */
-
-// Phrase bank: A2 level — simple sentences, present/past tense, basic vocab
-var a2Phrases = [
-  "The cat is on the table.",
-  "I like to play soccer.",
-  "She reads a book every day.",
-  "We go to the park on Sundays.",
-  "He wants to learn English.",
-  "They have a red car.",
-  "The weather is nice today.",
-  "I eat breakfast at 8 o'clock.",
-  "She lives in a small city.",
-  "We watch TV after dinner."
-];
-
-// Phrase bank: B1 level — more complex, future tense, opinions
-var b1Phrases = [
-  "I think he should study more.",
-  "She might come to the party tomorrow.",
-  "We would travel around the world if we had time.",
-  "By the time you read this, I will have left.",
-  "Although it was raining, we went out.",
-  "He needs to finish his homework before going out.",
-  "They have been friends since childhood.",
-  "She can speak three languages fluently.",
-  "We must finish this project by Friday."
-];
-
-
 /** Altitude in metres (the client counts 50 world px as one metre). */
 export const MEDALS = [40, 80, 120];
 export const MEDAL_NAMES = ['🥇 Gold', '🥈 Silver', '🥉 Bronze'];
@@ -129,20 +97,6 @@ export interface Room {
   over: boolean;
   started: boolean;
   createdAt: number;
-  /** English learning level chosen for this session */
-  englishLevel: 'A2' | 'B1' | null;
-  /** Indices of asked questions for 300-point milestones, to avoid repeats */
-  askedQuestions: number[];
-  /** Remaining time for 5-minute round in milliseconds (null for solo) */
-  roundTimerMs: number | null;
-  /** When the 5-minute round started (for server-authoritative counting) */
-  roundStartTime: number | null;
-  /** Current active challenge: 'death' | 'question' | null */
-  challengeMode: 'death' | 'question' | null;
-  /** Phrase to translate in a death challenge, or question text */
-  challengePhrase: string;
-  /** Player who died and is attempting a challenge */
-  challengePlayerId: string | null;
 }
 
 export const rooms = new Map<string, Room>();

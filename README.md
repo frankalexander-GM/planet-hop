@@ -25,6 +25,14 @@ Want to test on your phone? If Windows asks about firewall access, allow it.
 | Glide | hold the jump key in the air — slower fall, more air control |
 | Restart | `R` |
 
+## Learn English while you play
+
+Choose A2 or B1 before a run. Random English-to-Spanish translation challenges
+appear at each new 300-point milestone. In solo mode, a correct translation
+after a death revives you at your last safe planet; an incorrect answer ends
+the run and lets you start again from zero. Questions pause that player's
+movement while the multiplayer room clock, when active, continues.
+
 ## The two rules that matter
 
 1. **The doodle never walks.** It sticks to one spot on the planet. The planet

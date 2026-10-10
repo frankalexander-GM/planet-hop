@@ -195,6 +195,14 @@
         }
         .howto b { color: #1f2937; }
         #startBtn { width: 100%; padding: 0.75rem; font-size: 1.5rem; }
+        .english-level-row { margin:0.6rem 0; text-align:left; font-size:0.9rem; }
+        .english-level-row select, #learningAnswer { width:100%; min-height:44px; margin-top:0.25rem; padding:0.45rem 0.6rem; border:2px solid #2b2b2b; border-radius:0.5rem; background:#fff; font:1rem 'Patrick Hand',cursive; }
+        #learningOverlay { position:fixed; inset:0; z-index:40; display:grid; place-items:center; padding:1rem; background:rgba(0,0,0,.48); }
+        #learningOverlay[hidden] { display:none; }
+        #learningCard { width:min(100%,26rem); max-height:calc(100dvh - 2rem); overflow:auto; padding:1.3rem 1.5rem; text-align:center; }
+        #learningPrompt { margin:0.8rem 0; padding:0.75rem; background:#fef9e7; border:2px dashed #f5cf6b; border-radius:.6rem; font-size:1.2rem; }
+        #learningFeedback { min-height:1.35em; margin:.45rem 0; }
+        #learningSubmit { width:100%; padding:.65rem; font-size:1.3rem; }
         .buildtag { margin-top: 0.4rem; font-size: 0.75rem; color: #9ca3af; }
         /* Multiplayer lobby: same notebook cards, 2D only */
         #netBox { margin-top: 0.7rem; border-top: 2px dashed #d1d5db; padding-top: 0.6rem; text-align: left; }
@@ -310,9 +318,12 @@
                 <span><b>Flip</b> every landing turns the planet</span>
                 <span><b>Climb</b> the planet carries you</span>
             </div>
+            <label class="english-level-row" for="englishLevel">English challenge level
+                <select id="englishLevel"><option value="A2">A2 · Elementary</option><option value="B1">B1 · Intermediate</option></select>
+            </label>
             <button id="startBtn" class="btn-sketch btn-primary">START HOPPING!</button>
             <div id="netBox">
-                <div class="caption">Multiplayer · same seed, fair race (max 10)</div>
+                <div class="caption">Multiplayer · same seed, fair race (max 5)</div>
                 <div id="roomBig" title="tap to copy"><b id="roomBigCode">----</b><b id="roomCount">0/5</b><span id="roomBigSub">tap to copy · max 5 players</span></div>
                 <div id="netRoster"></div>
                 <input id="netName" maxlength="14" placeholder="your name (ej: SENA)" />
@@ -333,6 +344,21 @@
     </div>
 
     <canvas id="gameCanvas"></canvas>
+
+    <div id="learningOverlay" hidden>
+        <section id="learningCard" class="panel-sketch" role="dialog" aria-modal="true" aria-labelledby="learningTitle">
+            <h2 id="learningTitle" class="sketch-font">English challenge</h2>
+            <label class="english-level-row" for="quizLevel">Level
+                <select id="quizLevel"><option value="A2">A2 · Elementary</option><option value="B1">B1 · Intermediate</option></select>
+            </label>
+            <p id="learningPrompt"></p>
+            <input id="learningAnswer" type="text" autocomplete="off" placeholder="Write your answer in Spanish" />
+            <p id="learningFeedback" role="status"></p>
+            <button id="learningSubmit" type="button" class="btn-sketch btn-primary">CHECK ANSWER</button>
+        </section>
+    </div>
+
+    <script src="english-learning.js"></script>
 
     <script>
         'use strict';
@@ -2474,6 +2500,17 @@
         var startBtn = document.getElementById('startBtn');
         var soundBtn = document.getElementById('soundBtn');
         var soundIcon = document.getElementById('soundIcon');
+        var englishLevel = document.getElementById('englishLevel');
+        var quizLevel = document.getElementById('quizLevel');
+        var learningOverlay = document.getElementById('learningOverlay');
+        var learningTitle = document.getElementById('learningTitle');
+        var learningPrompt = document.getElementById('learningPrompt');
+        var learningAnswer = document.getElementById('learningAnswer');
+        var learningFeedback = document.getElementById('learningFeedback');
+        var learningSubmit = document.getElementById('learningSubmit');
+        var englishApi = globalThis.PlanetHopEnglish;
+        var englishSession = null, milestoneTracker = englishApi.createMilestoneTracker(300, 0);
+        var milestoneQueue = [], activeChallenge = null, reviveCheckpoint = null;
 
         var width = 0, height = 0, lastTs = 0, jumpQueued = false, menuShown = true;
         var runBestAtStart = 0, celebratedBest = false;
@@ -2813,6 +2850,12 @@
             sound.init();
             resize(); // fresh dimensions: rotation, late load, race-proof
             world = createWorld(width, height, readBest(), seed);
+            reviveCheckpoint = cloneGameState(world);
+            milestoneTracker = englishApi.createMilestoneTracker(300, world.score);
+            milestoneQueue.length = 0;
+            activeChallenge = null;
+            learningOverlay.hidden = true;
+            englishSession = englishApi.createSession(englishLevel.value);
             jumpQueued = false;
             lastTs = 0;
             menuShown = false;
@@ -2837,6 +2880,8 @@
             var h = world ? world.highScore : readBest();
             startRunSeeded(net.seed);
             world.score = s;
+            milestoneTracker = englishApi.createMilestoneTracker(300, s);
+            reviveCheckpoint = cloneGameState(world);
             if (world.highScore < h) world.highScore = h;
             scoreText.textContent = String(s);
             net.spectating = null;
@@ -2869,6 +2914,8 @@
         }
 
         function showMenu(title, subtitle, button) {
+            learningOverlay.hidden = true;
+            activeChallenge = null;
             menuTitle.textContent = title;
             menuSubtitle.textContent = subtitle;
             startBtn.textContent = button;
@@ -2903,9 +2950,88 @@
             }
             // Shown with a delay from the frame loop: the death plays first.
             showMenu('Oh no! Game Over 😵',
-                'You scored ' + world.score + ' points on your star adventure.',
+                'You scored ' + world.score + ' points. Translate correctly to revive at your last safe planet.',
                 'TRY AGAIN');
+            openLearningChallenge('death');
             menuShown = true;
+        }
+
+        function cloneGameState(value, seen) {
+            if (typeof structuredClone === 'function') return structuredClone(value);
+            seen = seen || new Map();
+            if (!value || typeof value !== 'object') return value;
+            if (seen.has(value)) return seen.get(value);
+            var copy = Array.isArray(value) ? [] : {};
+            seen.set(value, copy);
+            Object.keys(value).forEach(function (key) { copy[key] = cloneGameState(value[key], seen); });
+            return copy;
+        }
+
+        function sessionForSelectedLevel() {
+            var level = quizLevel.value === 'B1' ? 'B1' : 'A2';
+            if (!englishSession || englishSession.level !== level) englishSession = englishApi.createSession(level);
+            return englishSession;
+        }
+
+        function openLearningChallenge(mode, milestone) {
+            if (activeChallenge) return;
+            var level = englishLevel.value === 'B1' ? 'B1' : 'A2';
+            quizLevel.value = level;
+            englishLevel.value = level;
+            var session = sessionForSelectedLevel();
+            activeChallenge = { mode: mode, milestone: milestone || 0, question: session.next(), submitted: false };
+            learningTitle.textContent = mode === 'death' ? 'Translate to revive!' : 'English challenge · ' + milestone + ' points';
+            learningPrompt.textContent = activeChallenge.question.prompt;
+            learningAnswer.value = '';
+            learningFeedback.textContent = '';
+            learningSubmit.textContent = mode === 'death' ? 'CHECK & REVIVE' : 'CHECK ANSWER';
+            learningOverlay.hidden = false;
+            holding = false;
+            jumpQueued = false;
+        }
+
+        function continueAfterLearning() {
+            learningOverlay.hidden = true;
+            activeChallenge = null;
+            if (milestoneQueue.length) openLearningChallenge('milestone', milestoneQueue.shift());
+        }
+
+        function submitLearningAnswer() {
+            if (!activeChallenge) return;
+            if (activeChallenge.submitted) { continueAfterLearning(); return; }
+            var correct = englishApi.isCorrect(activeChallenge.question, learningAnswer.value);
+            activeChallenge.submitted = true;
+            if (activeChallenge.mode === 'death') {
+                if (!correct) {
+                    activeChallenge = null;
+                    learningOverlay.hidden = true;
+                    showMenu('Game over 😵', 'Incorrect translation. Your next run starts from zero.', 'START FROM ZERO');
+                    return;
+                }
+                world = cloneGameState(reviveCheckpoint || createWorld(width, height, readBest(), randomSeed()));
+                world.phase = 'playing';
+                world.events = [];
+                world.input = { held: false };
+                scoreText.textContent = String(world.score);
+                highScoreText.textContent = String(world.highScore);
+                menuShown = false;
+                lastTs = 0;
+                fx.dieT = -1; fx.parts.length = 0; fx.popups.length = 0;
+                fx.ripples.length = 0; fx.trail.length = 0; fx.shake = 0; fx.squashT = 0;
+                learningOverlay.hidden = true;
+                activeChallenge = null;
+                return;
+            }
+            learningFeedback.textContent = correct ? 'Correct! Keep climbing.' : 'Not quite. The correct answer is: ' + activeChallenge.question.answers[0] + '.';
+            learningFeedback.style.color = correct ? '#15803d' : '#b91c1c';
+            learningSubmit.textContent = milestoneQueue.length ? 'CONTINUE' : 'CONTINUE PLAYING';
+        }
+
+        function checkEnglishMilestones() {
+            if (!world || world.phase !== 'playing') return;
+            var crossed = milestoneTracker.observe(world.score);
+            for (var i = 0; i < crossed.length; i++) milestoneQueue.push(crossed[i]);
+            if (!activeChallenge && milestoneQueue.length) openLearningChallenge('milestone', milestoneQueue.shift());
         }
 
         function buzz(ms) {
@@ -2968,17 +3094,18 @@
             lastTs = ts;
             if (!world) return;
 
-            if (world.phase === 'playing' && jumpQueued) {
-                jumpQueued = false;
-                requestJump(world);
+            if (!activeChallenge) {
+                if (world.phase === 'playing' && jumpQueued) {
+                    jumpQueued = false;
+                    requestJump(world);
+                }
+                if (world.input) world.input.held = holding && world.phase === 'playing';
+                stepWorld(world, dt);
             }
-            if (world.input) world.input.held = holding && world.phase === 'playing';
-
-            stepWorld(world, dt);
             stepFx(dt);
 
             // Flight trail: remember where the doodle has been.
-            if (world.phase === 'playing' && world.player.airborne) {
+            if (!activeChallenge && world.phase === 'playing' && world.player.airborne) {
                 fx.trail.push({ x: world.player.x, y: world.player.y });
                 if (fx.trail.length > 14) fx.trail.shift();
             }
@@ -2987,7 +3114,9 @@
             world.events = [];
             for (var i = 0; i < evts.length; i++) {
                 playEvent(evts[i]);
+                if (evts[i] === 'land' && !net.active) reviveCheckpoint = cloneGameState(world);
             }
+            checkEnglishMilestones();
 
             // Let the death animation play before covering it with the menu.
             if (world.phase === 'over' && !menuShown && fx.dieT > 0.9) {
@@ -3047,6 +3176,7 @@
             return false;
         }
         function pressAction() {
+            if (activeChallenge) return;
             // Fair-race guard: in a room, never solo-start with a random seed.
             if (net.active) {
                 if (net.over) { startRun(); return; } // podium button = solo again
@@ -3059,6 +3189,10 @@
         }
         window.addEventListener('keydown', function (e) {
             if (isTypingTarget(e.target) || (document.activeElement && ((document.activeElement.matches && document.activeElement.matches('input, textarea, select')) || document.activeElement.isContentEditable))) {
+                return;
+            }
+            if (activeChallenge) {
+                if (e.code === 'Space' || e.key === 'ArrowUp' || e.key === 'r' || e.key === 'R') e.preventDefault();
                 return;
             }
             if (e.code === 'Space' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
@@ -3092,10 +3226,23 @@
         } catch (e) {}
         window.addEventListener('blur', function () { holding = false; jumpQueued = false; });
         startBtn.addEventListener('click', function () {
+            if (activeChallenge) return;
             // Same fair guard as space/tap: in lobby START = READY, never solo.
             if (net.active && !net.over && !net.started) { netSay({ t: 'ready' }); netStatus('ready! waiting for GO…'); return; }
             if (net.active && !net.over && net.started) { netRespawn(); return; }
             startRun();
+        });
+        learningSubmit.addEventListener('click', submitLearningAnswer);
+        learningAnswer.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); submitLearningAnswer(); }
+        });
+        englishLevel.addEventListener('change', function () {
+            quizLevel.value = englishLevel.value;
+            englishSession = englishApi.createSession(englishLevel.value);
+        });
+        quizLevel.addEventListener('change', function () {
+            englishLevel.value = quizLevel.value;
+            englishSession = englishApi.createSession(quizLevel.value);
         });
         soundBtn.addEventListener('click', function () {
             sound.enabled = !sound.enabled;
