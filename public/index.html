@@ -2761,6 +2761,8 @@
                 net.spectating = null;
                 net.roundEndsAt = Date.now();
                 milestoneQueue.length = 0;
+                activeChallenge = null;
+                learningOverlay.hidden = true;
                 if (world) world.phase = 'over';
                 var pod = (m.podium || []).map(function (p) { return p.place + '. ' + p.name + ' — ' + p.score + ' points (' + p.alt + ' m)'; }).join('\n');
                 showMenu(m.reason === 'time' ? "Time's up! Final scores" : 'Round over!', pod || 'No scores yet. Ask the room owner for a rematch.', 'KEEP HOPPING (solo)');
@@ -2952,21 +2954,11 @@
         }
 
         function gameOver() {
-            // Net mode: nobody is eliminated — spectate the closest,
-            // tap to climb again with the same seed.
+            // In a live room, everyone gets the same English revive challenge.
+            // A failed answer restarts this player at zero without leaving the room.
             if (net.active && net.started && !net.over) {
-                net.spectating = pickSpectate();
-                var nm = spectateName();
-                if (net.spectating) {
-                    fx.banner = 'WATCHING ' + nm.toUpperCase();
-                    fx.bannerT = 2.6;
-                    netStatus('eliminado · viendo a ' + nm + ' (el más cercano) · toca para volver.');
-                    menuShown = true;
-                    return;
-                }
-                showMenu('Ouch! Keep climbing!',
-                    'room ' + net.code + ' · score ' + world.score + ' · best height counts, tap to go again.',
-                    'CLIMB AGAIN');
+                net.spectating = null;
+                openLearningChallenge('death');
                 menuShown = true;
                 return;
             }
@@ -3037,6 +3029,16 @@
                 if (!correct) {
                     activeChallenge = null;
                     learningOverlay.hidden = true;
+                    if (net.active && net.started && !net.over) {
+                        world.score = 0;
+                        scoreText.textContent = '0';
+                        net.spectating = null;
+                        fx.banner = 'BACK TO START · SCORE 0';
+                        fx.bannerT = 2.6;
+                        netStatus('Respuesta incorrecta · score reiniciado a 0 · sigues en la sala ' + net.code + '.');
+                        netRespawn();
+                        return;
+                    }
                     var penaltyText = penalty ? ' -' + penalty + ' points.' : '';
                     showMenu('Game over 😵', 'Incorrect translation.' + penaltyText + ' Your next run starts from zero.', 'START FROM ZERO');
                     return;
@@ -3045,6 +3047,12 @@
                 world.phase = 'playing';
                 world.events = [];
                 world.input = { held: false };
+                if (net.active && net.started && !net.over) {
+                    net.spectating = null;
+                    net.deathSent = false;
+                    netSay({ t: 'sync' });
+                    netStatus('¡Respuesta correcta! Reviviste en tu último planeta seguro · sala ' + net.code + '.');
+                }
                 scoreText.textContent = String(world.score);
                 highScoreText.textContent = String(world.highScore);
                 menuShown = false;
@@ -3150,7 +3158,7 @@
             world.events = [];
             for (var i = 0; i < evts.length; i++) {
                 playEvent(evts[i]);
-                if (evts[i] === 'land' && !net.active) reviveCheckpoint = cloneGameState(world);
+                if (evts[i] === 'land') reviveCheckpoint = cloneGameState(world);
             }
             checkEnglishMilestones();
 
