@@ -93,12 +93,20 @@
         };
     }
 
+    function milestonePenalty(milestone, interval, basePenalty) {
+        var step = Math.max(1, Number(interval) || 300);
+        var base = Math.max(0, Number(basePenalty) || 10);
+        var level = Math.ceil(Math.max(0, Number(milestone) || 0) / step);
+        return level * base;
+    }
+
     var api = {
         banks: banks,
         normalizeAnswer: normalizeAnswer,
         isCorrect: isCorrect,
         createSession: createSession,
-        createMilestoneTracker: createMilestoneTracker
+        createMilestoneTracker: createMilestoneTracker,
+        milestonePenalty: milestonePenalty
     };
     root.PlanetHopEnglish = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

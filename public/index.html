@@ -3045,7 +3045,15 @@
                 activeChallenge = null;
                 return;
             }
-            learningFeedback.textContent = correct ? 'Correct! Keep climbing.' : 'Not quite. The correct answer is: ' + activeChallenge.question.answers[0] + '.';
+            var penalty = 0;
+            if (!correct && activeChallenge.mode === 'milestone' && world) {
+                penalty = englishApi.milestonePenalty(activeChallenge.milestone, 300, 10);
+                world.score = Math.max(0, world.score - penalty);
+                scoreText.textContent = String(world.score);
+            }
+            learningFeedback.textContent = correct
+                ? 'Correct! Keep climbing.'
+                : 'Not quite. -' + penalty + ' points. Correct answer: ' + activeChallenge.question.answers[0] + '.';
             learningFeedback.style.color = correct ? '#15803d' : '#b91c1c';
             learningSubmit.textContent = milestoneQueue.length ? 'CONTINUE' : 'CONTINUE PLAYING';
         }
