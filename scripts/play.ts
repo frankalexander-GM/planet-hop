@@ -1,3 +1,5 @@
+/// <reference types="bun" />
+
 /**
  * Planet Hop — local game server.
  *

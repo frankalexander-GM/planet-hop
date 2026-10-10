@@ -15,9 +15,9 @@
  *    - Stars are shared: a star on planet #N is worth +5 to whoever grabs
  *      it first. Server arbitrates by planet INDEX, so it works even when
  *      players have different screen sizes.
- *    - Medals by altitude (40m / 80m / 120m), awarded live. The round ends
- *      when someone takes gold, and everyone who earned a medal keeps it.
- *      Falling just means you climb again — you are never out.
+ *    - Medals by altitude (40m / 80m / 120m), awarded live. Rounds last five
+ *      minutes, then every player is ranked by score. Falling just means you
+ *      climb again — you are never out.
  *
  *  Planets are never transmitted: same seed + same index = same planet.
  *
@@ -25,52 +25,21 @@
  *   C->S  {t:'hello'}                     -> S {t:'welcome', id}
  *   C->S  {t:'create', name}              -> S {t:'room', code, seed, ...}
  *   C->S  {t:'join', code, name}          -> S {t:'room', ...} | {t:'error', message}
- *   C->S  {t:'ready'}                     -> S {t:'go'}  (round starts)
+ *   C->S  {t:'ready'}                     -> S {t:'go', seed, durationMs}
  *   C->S  {t:'pos', x, y, alt, planet, angle, air, score}
  *                                         -> S {t:'states', states:[...]}
  *   C->S  {t:'star', planet}              -> S {t:'starTaken', planet, by, score}
  *   C->S  {t:'rematch'}                   -> S {t:'reset'}
  *   S->*  {t:'players', players:[{id,name,color,score,alt,medal}]}
  *   S->*  {t:'medal', place, id, name}
- *   S->*  {t:'over', podium:[{place,id,name,score,alt}]}
+ *   S->*  {t:'over', reason:'time', podium:[{place,id,name,score,alt}]}
  *   S->*  {t:'bye', id}
  */
 
 // Room size + pacing. Bump MAX_PLAYERS only with matching client colors.
 export const MAX_PLAYERS = 5;
 export const POS_PER_SECOND = 10;
-
-/* ============================================================
-   ENGLISH LEARNING — A2 and B1 phrase banks
-   ============================================================ */
-
-// Phrase bank: A2 level — simple sentences, present/past tense, basic vocab
-var a2Phrases = [
-  "The cat is on the table.",
-  "I like to play soccer.",
-  "She reads a book every day.",
-  "We go to the park on Sundays.",
-  "He wants to learn English.",
-  "They have a red car.",
-  "The weather is nice today.",
-  "I eat breakfast at 8 o'clock.",
-  "She lives in a small city.",
-  "We watch TV after dinner."
-];
-
-// Phrase bank: B1 level — more complex, future tense, opinions
-var b1Phrases = [
-  "I think he should study more.",
-  "She might come to the party tomorrow.",
-  "We would travel around the world if we had time.",
-  "By the time you read this, I will have left.",
-  "Although it was raining, we went out.",
-  "He needs to finish his homework before going out.",
-  "They have been friends since childhood.",
-  "She can speak three languages fluently.",
-  "We must finish this project by Friday."
-];
-
+export const ROUND_DURATION_MS = 5 * 60 * 1000;
 
 /** Altitude in metres (the client counts 50 world px as one metre). */
 export const MEDALS = [40, 80, 120];
@@ -129,20 +98,7 @@ export interface Room {
   over: boolean;
   started: boolean;
   createdAt: number;
-  /** English learning level chosen for this session */
-  englishLevel: 'A2' | 'B1' | null;
-  /** Indices of asked questions for 300-point milestones, to avoid repeats */
-  askedQuestions: number[];
-  /** Remaining time for 5-minute round in milliseconds (null for solo) */
-  roundTimerMs: number | null;
-  /** When the 5-minute round started (for server-authoritative counting) */
-  roundStartTime: number | null;
-  /** Current active challenge: 'death' | 'question' | null */
-  challengeMode: 'death' | 'question' | null;
-  /** Phrase to translate in a death challenge, or question text */
-  challengePhrase: string;
-  /** Player who died and is attempting a challenge */
-  challengePlayerId: string | null;
+  endsAt: number | null;
 }
 
 export const rooms = new Map<string, Room>();
@@ -171,6 +127,20 @@ function podium(room: Room) {
     });
 }
 
+export function scoreBoard(room: Room) {
+  return [...room.players.values()]
+    .sort((a, b) => b.score - a.score || b.alt - a.alt || a.name.localeCompare(b.name))
+    .map((p, index) => ({ place: index + 1, id: p.id, name: p.name, score: p.score, alt: Math.round(p.alt) }));
+}
+
+export function finishTimedRound(room: Room, now = Date.now()) {
+  if (room.over || !room.started || room.endsAt === null || now < room.endsAt) return false;
+  room.over = true;
+  broadcast(room, { t: 'over', reason: 'time', podium: scoreBoard(room) });
+  announcePlayers(room);
+  return true;
+}
+
 export function announcePlayers(room: Room) {
   const list = [...room.players.values()].map((p) => ({
     id: p.id, name: p.name, color: p.color,
@@ -192,10 +162,6 @@ function checkMedals(room: Room, player: Player) {
     if (player.alt < MEDALS[place]) continue;
     room.medals.set(place, player.name);
     broadcast(room, { t: 'medal', place, id: player.id, name: player.name });
-    if (place === 0) {
-      room.over = true;
-      broadcast(room, { t: 'over', podium: podium(room) });
-    }
     announcePlayers(room);
     return;
   }
@@ -227,6 +193,7 @@ function joinRoom(room: Room, ws: any, ctx: any, name: string) {
     })),
     medals: [],
     started: room.started,
+    remainingMs: room.started && room.endsAt !== null ? Math.max(0, room.endsAt - Date.now()) : 0,
     medalMeters: MEDALS,
   }));
   announcePlayers(room);
@@ -263,7 +230,7 @@ export function wsMessage(ws: any, raw: any) {
       players: new Map(), sockets: new Map(),
       stars: new Map(), medals: new Map(), flips: new Map(),
       creatorId: ctx.id,
-      over: false, started: false, createdAt: Date.now(),
+      over: false, started: false, createdAt: Date.now(), endsAt: null,
     };
     rooms.set(code, room);
     joinRoom(room, ws, ctx, cleanName(msg.name));
@@ -279,7 +246,7 @@ export function wsMessage(ws: any, raw: any) {
       return;
     }
     if (room.players.size >= MAX_PLAYERS) {
-      ws.send(JSON.stringify({ t: 'error', message: 'Room is full (10 max).' }));
+      ws.send(JSON.stringify({ t: 'error', message: 'Room is full (5 max).' }));
       return;
     }
     if (room.over) {
@@ -295,8 +262,10 @@ export function wsMessage(ws: any, raw: any) {
   if (!room || !id) return;
 
   if (msg.t === 'ready') {
+    if (id !== room.creatorId || room.over || room.started) return;
     room.started = true;
-    broadcast(room, { t: 'go', seed: room.seed });
+    room.endsAt = Date.now() + ROUND_DURATION_MS;
+    broadcast(room, { t: 'go', seed: room.seed, durationMs: ROUND_DURATION_MS });
     return;
   }
 
@@ -326,13 +295,14 @@ export function wsMessage(ws: any, raw: any) {
 
   if (msg.t === 'pos') {
     const p = room.players.get(id);
-    if (!p) return;
+    if (!p || room.over) return;
     if (isNum(msg.x) && isNum(msg.y) && Math.abs(msg.x) < 1e5 && Math.abs(msg.y) < 1e6) {
       p.x = msg.x;
       p.y = msg.y;
     }
     if (isNum(msg.w) && msg.w > 0) p.w = Math.min(msg.w, 5000); // screen width for x-normalizing
     if (isNum(msg.alt) && msg.alt > p.alt) p.alt = Math.min(msg.alt, 9999); // best height kept
+    if (isNum(msg.score) && Math.abs(msg.score) <= 1e6) p.score = msg.score;
     p.planet = Number.isInteger(msg.planet) ? msg.planet : null;
     p.angle = isNum(msg.angle) ? msg.angle : 0;
     p.air = msg.air === true;
@@ -355,12 +325,14 @@ export function wsMessage(ws: any, raw: any) {
   }
 
   if (msg.t === 'rematch') {
+    if (id !== room.creatorId || !room.over) return;
     room.seed = (Math.random() * 0x7fffffff) | 0;
     room.stars.clear();
     room.medals.clear();
     room.flips.clear();
     room.over = false;
     room.started = false;
+    room.endsAt = null;
     for (const p of room.players.values()) {
       p.score = 0; p.alt = 0; p.dead = false;
     }
@@ -403,6 +375,7 @@ export function startLoops() {
 
   setInterval(() => {
     for (const room of rooms.values()) {
+      finishTimedRound(room);
       if (room.sockets.size === 0) continue;
       broadcast(room, {
         t: 'states',
