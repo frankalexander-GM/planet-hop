@@ -80,9 +80,10 @@ doodle so your jumps feel instant; the server arbitrates what has to be shared.
 
 - **Shared stars**: the star on planet #N is worth +5 to whoever grabs it first
 - **Medals by altitude**: 40 m, 80 m, 120 m, awarded live
-- **Nobody is eliminated**: you fall, you climb again. Gold closes the round and
-  the podium shows everyone who earned a medal
-- Rooms of up to 8 players, shared 4-letter code
+- **Five-minute rounds**: the clock starts when the room owner starts the round;
+  when it expires, the final table ranks everyone by score, highest first
+- **Nobody is eliminated**: you fall and climb again until time runs out
+- Rooms of up to 5 players, including the owner, with a shared 4-letter code
 
 ```bash
 bun run net     # port 8902
@@ -91,8 +92,8 @@ bun run net     # port 8902
 The game finds the server on its own host, so a phone on the same Wi-Fi connects
 without editing anything. Point it elsewhere with `?server=host:port`.
 
-The lobby and the live leaderboard are the next piece of work — the server side
-is ready and waiting.
+The live room board shows current altitude; the final table at the end of each
+round is ordered by score.
 
 ## How it is put together
 

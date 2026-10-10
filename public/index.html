@@ -132,6 +132,9 @@
             font-size: 1.75rem;
             line-height: 1.1;
         }
+        #roundTimerBox { display:none; text-align:center; min-width:3.7rem; }
+        #roundTimer { font-family:'Caveat',cursive; font-size:1.45rem; font-weight:700; line-height:1.1; color:#b91c1c; }
+        #menuSubtitle { white-space:pre-line; }
         .divider { width: 2px; height: 2rem; background: rgba(209, 213, 219, 0.7); }
         #soundBtn { pointer-events: auto; padding: 0.6rem 0.8rem; font-size: 0.95rem; line-height: 1; letter-spacing: 0.05em; }
 
@@ -285,6 +288,7 @@
                 <span class="caption">Best</span>
                 <span id="highScoreText" class="score-num" style="color:#d97706">0</span>
             </div>
+            <div id="roundTimerBox"><span class="caption">Time left</span><span id="roundTimer">05:00</span></div>
             <span id="roomBadge" title="tap to copy code">----</span>
         </div>
         <button id="soundBtn" class="btn-sketch" aria-label="Mute sound">
@@ -2528,6 +2532,7 @@
             ws: null, active: false, myId: null, myName: 'Player',
             code: '', seed: 0, creatorId: null, color: '#8B5CF6',
             players: [], states: [], medals: [], started: false, over: false,
+            roundEndsAt: 0,
             lastSend: 0, board: null, pendingOp: '', pendingFlips: {},
             spectating: null, deathSent: false
         };
@@ -2556,12 +2561,12 @@
             return false;
         }
         function netRoomCount() {
-            // Big live counter: how many joined out of 10.
+            // Big live counter: how many joined out of five.
             try {
                 var rc = document.getElementById('roomCount');
-                if (rc && net.active) rc.textContent = net.players.length + '/10';
+                if (rc && net.active) rc.textContent = net.players.length + '/5';
                 var rbs = document.getElementById('roomBigSub');
-                if (rbs && net.active) rbs.textContent = 'tap to copy · ' + net.players.length + '/10 unidos · SALIR abajo para salir';
+                if (rbs && net.active) rbs.textContent = 'tap to copy · ' + net.players.length + '/5 unidos · SALIR abajo para salir';
             } catch (e) {}
         }
         function netEsc(s) {
@@ -2595,7 +2600,7 @@
             net.ws.onmessage = netOnMsg;
             net.ws.onclose = function () {
                 if (net.active) netStatus('disconnected — back to solo. (code was ' + net.code + ')');
-                net.active = false; net.started = false;
+                net.active = false; net.started = false; net.roundEndsAt = 0;
                 showNetButtons(false);
             };
             net.ws.onerror = function () { netStatus('net error — is `bun run net` on port 8902?'); };
@@ -2605,7 +2610,7 @@
             // Only the creator (admin) starts rounds: READY + REMATCH are theirs.
             var admin = netIsOwner();
             if (r) r.style.display = (inRoom && !net.started && admin) ? 'block' : 'none';
-            if (m) m.style.display = (inRoom && admin) ? 'block' : 'none';
+            if (m) m.style.display = (inRoom && admin && net.over) ? 'block' : 'none';
             if (l) l.style.display = inRoom ? 'block' : 'none';
             var b = document.getElementById('roomBadge');
             if (b) { b.style.display = inRoom ? 'inline-block' : 'none'; if (inRoom) b.textContent = net.code || '----'; }
@@ -2615,12 +2620,23 @@
             if (rbc && inRoom) rbc.textContent = net.code || '----';
             var nb = document.getElementById('netBoard');
             if (nb) nb.style.display = inRoom ? 'block' : 'none';
+            var timerBox = document.getElementById('roundTimerBox');
+            if (timerBox) timerBox.style.display = inRoom && net.started ? 'block' : 'none';
             // In a room the code box is useless: hide it, show it on leave.
             try {
                 var nc = document.getElementById('netCode');
                 if (nc) nc.style.display = inRoom ? 'none' : 'block';
             } catch (e) {}
             netRoomCount();
+        }
+        function updateRoundTimer() {
+            var box = document.getElementById('roundTimerBox');
+            var text = document.getElementById('roundTimer');
+            if (!box || !text) return;
+            box.style.display = net.active && net.started ? 'block' : 'none';
+            if (!net.active || !net.started || !net.roundEndsAt) return;
+            var seconds = Math.max(0, Math.ceil((net.roundEndsAt - Date.now()) / 1000));
+            text.textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
         }
         function netOnMsg(ev) {
             var m;
@@ -2633,6 +2649,7 @@
                 net.myId = (m.you && m.you.id) || net.myId;
                 net.color = (m.you && m.you.color) || net.color;
                 net.started = !!m.started; net.over = false;
+                net.roundEndsAt = net.started ? Date.now() + Math.max(0, Number(m.remainingMs) || 0) : 0;
                 net.players = m.players || []; net.medals = m.medals || [];
                 var wasJoin = net.pendingOp === 'join';
                 net.pendingOp = '';
@@ -2644,7 +2661,7 @@
                     var rbc2 = document.getElementById('roomBigCode');
                     if (rbc2) rbc2.textContent = net.code;
                     var rbs = document.getElementById('roomBigSub');
-                    if (rbs) rbs.textContent = 'tap to copy · ' + net.players.length + '/10 · leave abajo para salir';
+                    if (rbs) rbs.textContent = 'tap to copy · ' + net.players.length + '/5 · leave abajo para salir';
                 } catch (e) {}
                 // Join notice: clear banner + canvas popup so you know you are in.
                 if (world) {
@@ -2661,12 +2678,13 @@
                 resize();
                 world = createWorld(width, height, readBest(), net.seed);
                 world.phase = 'idle';
-                if (wasJoin) netStatus('¡Te uniste a la SALA ' + net.code + '! · ' + net.players.length + '/10 · pulsa READY o leave abajo para salir.');
+                if (wasJoin) netStatus('¡Te uniste a la SALA ' + net.code + '! · ' + net.players.length + '/5 · pulsa READY o leave abajo para salir.');
                 else netStatus('SALA ' + net.code + ' creada · pasa el código · pulsa READY cuando estén listos · leave abajo para salir.');
                 return;
             }
             if (m.t === 'go') {
                 net.seed = m.seed; net.started = true; net.over = false;
+                net.roundEndsAt = Date.now() + (Number(m.durationMs) || 300000);
                 net.spectating = null; net.deathSent = false; net.pendingFlips = {};
                 startRunSeeded(net.seed);
                 netStatus('GO! room ' + net.code + ' · same planets for all.');
@@ -2741,8 +2759,11 @@
             if (m.t === 'over') {
                 net.over = true;
                 net.spectating = null;
-                var pod = (m.podium || []).map(function (p) { return p.medal + ' ' + p.name + ' (' + p.alt + 'm)'; }).join(' · ');
-                showMenu('Round over!', pod || 'podium is empty — rematch?', 'KEEP HOPPING (solo)');
+                net.roundEndsAt = Date.now();
+                milestoneQueue.length = 0;
+                if (world) world.phase = 'over';
+                var pod = (m.podium || []).map(function (p) { return p.place + '. ' + p.name + ' — ' + p.score + ' points (' + p.alt + ' m)'; }).join('\n');
+                showMenu(m.reason === 'time' ? "Time's up! Final scores" : 'Round over!', pod || 'No scores yet. Ask the room owner for a rematch.', 'KEEP HOPPING (solo)');
                 menuShown = true;
                 netStatus('round over · ' + pod + ' · press REMATCH for a fair restart.');
                 showNetButtons(true);
@@ -2750,6 +2771,7 @@
             }
             if (m.t === 'reset') {
                 net.seed = m.seed; net.over = false; net.started = false;
+                net.roundEndsAt = 0;
                 net.spectating = null; net.deathSent = false; net.pendingFlips = {};
                 resize();
                 world = createWorld(width, height, readBest(), net.seed);
@@ -2787,7 +2809,7 @@
             var el = document.getElementById('netBoard');
             if (!el) return;
             if (!net.active) { el.style.display = 'none'; netDrawRoster(); return; }
-            var h = '<b>' + net.code + '</b> · ' + net.players.length + '/10<br>';
+            var h = '<b>' + net.code + '</b> · ' + net.players.length + '/5<br>';
             var sorted = net.players.slice().sort(function (a, b) { return (b.alt || 0) - (a.alt || 0); });
             for (var i = 0; i < sorted.length; i++) {
                 h += (i + 1) + '. <span style="color:' + sorted[i].color + '">●</span> ' +
@@ -2843,7 +2865,7 @@
         function startRun() {
             startRunSeeded(randomSeed());
             // solo hop leaves any room quietly (no error spam)
-            if (net.active) { try { if (net.ws) net.ws.close(); } catch (e) {} net.active = false; net.started = false; showNetButtons(false); }
+            if (net.active) { try { if (net.ws) net.ws.close(); } catch (e) {} net.active = false; net.started = false; net.roundEndsAt = 0; showNetButtons(false); }
         }
 
         function startRunSeeded(seed) {
@@ -3092,6 +3114,7 @@
             requestAnimationFrame(frame);
             var dt = Math.min(0.05, (ts - lastTs) / 1000) || 0;
             lastTs = ts;
+            updateRoundTimer();
             if (!world) return;
 
             if (!activeChallenge) {
@@ -3297,7 +3320,7 @@
             if (netLeave) netLeave.addEventListener('click', function () {
                 var oldCode = net.code;
                 try { if (net.ws) net.ws.close(); } catch (e) {}
-                net.active = false; net.started = false; net.over = false;
+                net.active = false; net.started = false; net.over = false; net.roundEndsAt = 0;
                 net.players = []; net.states = []; net.code = ''; net.pendingOp = '';
                 showNetButtons(false);
                 netDrawBoard();
