@@ -12,6 +12,9 @@
  */
 
 import { rooms, wsOpen, wsMessage, wsClose, startLoops } from './rooms.ts';
+import {
+  getClientIp, isBlocked, canConnect, isOriginAllowed, httpRateLimit, checkRequest, sanitizePath,
+} from './firewall.ts';
 
 /** Minimal Bun surface: this file only needs `Bun.serve`. Declared here so
  *  the repo does not need @types/bun just for a couple of calls. */
@@ -33,7 +36,7 @@ async function servePublic(req: Request): Promise<Response> {
   const path = new URL(req.url).pathname;
   const file = path === '/' ? '/index.html' : path;
   // Only ever serve from inside public/.
-  const safe = file.replace(/\/+/g, '/').replace(/\.\./g, '');
+  const safe = sanitizePath(file);
   const target = new URL('../public' + safe, import.meta.url);
   const f = Bun.file(filePathFromUrl(target as URL));
   if (await f.exists()) {
@@ -52,12 +55,27 @@ const server = Bun.serve({
   port: PORT,
   hostname: '0.0.0.0', // reachable from phones and from Coolify's proxy
   fetch(req, srv) {
-    if (new URL(req.url).pathname === '/health') {
+    const url = new URL(req.url);
+    const ip = getClientIp(req);
+
+    // Firewall: block / rate-limit / origin checks.
+    if (isBlocked(ip)) return new Response('Forbidden', { status: 403 });
+    if (!httpRateLimit(ip)) return new Response('Too Many Requests', { status: 429 });
+    const origin = req.headers.get('origin');
+    // Only enforce origin on websocket upgrades; static assets are same-origin.
+    const isUpgrade = req.headers.get('upgrade')?.toLowerCase() === 'websocket';
+
+    if (url.pathname === '/health') {
       return Response.json({ ok: true, rooms: rooms.size });
     }
     // Plain browser navigation is NOT a socket: fall through to files.
     // A real WebSocket handshake upgrades here (same origin, any path).
-    if (srv.upgrade(req)) return undefined;
+    if (isUpgrade) {
+      if (!isOriginAllowed(origin)) return new Response('Forbidden', { status: 403 });
+      if (!canConnect(ip)) return new Response('Too Many Requests', { status: 429 });
+      if (srv.upgrade(req, { data: { ip, origin } })) return undefined;
+      return new Response('Upgrade failed', { status: 400 });
+    }
     return servePublic(req);
   },
   websocket: {

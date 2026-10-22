@@ -36,6 +36,12 @@
  *   S->*  {t:'bye', id}
  */
 
+import {
+  isBlocked, canConnect, registerConnection, releaseConnection,
+  isOriginAllowed, getClientIp, normalizeIp,
+} from './firewall.ts';
+export * from './firewall.ts';
+
 // Room size + pacing. Bump MAX_PLAYERS only with matching client colors.
 export const MAX_PLAYERS = 5;
 export const POS_PER_SECOND = 10;
@@ -200,12 +206,34 @@ function joinRoom(room: Room, ws: any, ctx: any, name: string) {
 }
 
 // Bun websocket handlers — shared by net-server.ts and web.ts.
-export function wsOpen(ws: any) {
-  ws.data = { id: null as string | null, room: null as Room | null, stamps: [] as number[] };
+export function wsOpen(ws: any, req?: any) {
+  const base = (ws && ws.data && typeof ws.data === 'object') ? ws.data : {};
+  const ipFromReq = req ? (typeof req === 'string' ? req : (req.ip ?? req.remoteAddress ?? null)) : null;
+  const originFromReq = req && typeof req !== 'string' ? (req.origin ?? req.headers?.origin ?? null) : null;
+  ws.data = {
+    id: null as string | null,
+    room: null as Room | null,
+    stamps: [] as number[],
+    ip: base.ip ?? base.remoteAddress ?? ws?.remoteAddress ?? ipFromReq ?? null,
+    origin: base.origin ?? originFromReq ?? null,
+  };
+  const ip = ws.data.ip;
+  // Firewall: drop blocked / over-limit clients before they join.
+  if (ip && isBlocked(ip)) {
+    try { ws.close(1008, 'blocked by firewall'); } catch { /* ignore */ }
+    return;
+  }
+  if (ip && !canConnect(ip)) {
+    try { ws.close(1008, 'too many connections'); } catch { /* ignore */ }
+    return;
+  }
+  if (ip) registerConnection(ip);
 }
 
 export function wsMessage(ws: any, raw: any) {
-  const ctx = ws.data;
+  const ctx = ws?.data;
+  if (!ctx) return;
+  if (ctx.ip && isBlocked(ctx.ip)) return;
   const now = Date.now();
   ctx.stamps = ctx.stamps.filter((t: number) => t > now - 1000);
   if (ctx.stamps.length >= 40) return;
@@ -344,7 +372,8 @@ export function wsMessage(ws: any, raw: any) {
 }
 
 export function wsClose(ws: any) {
-  const ctx = ws.data;
+  const ctx = ws?.data;
+  if (ctx?.ip) releaseConnection(ctx.ip);
   const room: Room | null = ctx?.room;
   const id: string | null = ctx?.id;
   if (!room || !id) return;

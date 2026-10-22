@@ -11,6 +11,7 @@
  */
 
 import { rooms, wsOpen, wsMessage, wsClose, startLoops, MEDALS, MAX_PLAYERS } from './rooms.ts';
+import { getClientIp, isBlocked, canConnect, isOriginAllowed, httpRateLimit } from './firewall.ts';
 
 /** Minimal Bun surface: this file only needs `Bun.serve`. Declared here so
  *  the repo does not need @types/bun just for one call. */
@@ -23,10 +24,19 @@ startLoops();
 const server = Bun.serve({
   port: PORT,
   fetch(req, srv) {
+    const ip = getClientIp(req);
+    if (isBlocked(ip)) return new Response('Forbidden', { status: 403 });
+    if (!httpRateLimit(ip)) return new Response('Too Many Requests', { status: 429 });
     if (new URL(req.url).pathname === '/health') {
       return Response.json({ ok: true, rooms: rooms.size });
     }
-    if (srv.upgrade(req)) return undefined;
+    const origin = req.headers.get('origin');
+    if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+      if (!isOriginAllowed(origin)) return new Response('Forbidden', { status: 403 });
+      if (!canConnect(ip)) return new Response('Too Many Requests', { status: 429 });
+      if (srv.upgrade(req, { data: { ip, origin } })) return undefined;
+      return new Response('Upgrade failed', { status: 400 });
+    }
     return new Response('Planet Hop net server. Use a WebSocket client.', { status: 426 });
   },
   websocket: {
