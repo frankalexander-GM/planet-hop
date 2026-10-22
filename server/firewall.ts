@@ -103,6 +103,24 @@ export function canConnect(ip: string | null | undefined): boolean {
   const c = connCounts.get(n) || 0;
   return c < MAX_CONNECTIONS_PER_IP;
 }
+
+export function httpRateLimit(ip: string | null | undefined): boolean {
+  // returns true if request is allowed
+  if (!FIREWALL_ENABLED) return true;
+  const n = normalizeIp(ip ?? '');
+  // No identifiable client IP (common behind proxies that strip headers):
+  // do not collapse all traffic into one shared bucket.
+  if (!n) return true;
+  const now = Date.now();
+  const stamps = (httpStamps.get(n) || []).filter((t) => t > now - 60_000);
+  if (stamps.length >= HTTP_RATE_LIMIT) {
+    httpStamps.set(n, stamps);
+    return false;
+  }
+  stamps.push(now);
+  httpStamps.set(n, stamps);
+  return true;
+}
 export const allowConnection = canConnect;
 export const connectionAllowed = canConnect;
 
@@ -125,21 +143,6 @@ export function releaseConnection(ip: string | null | undefined) {
 }
 export const removeConnection = releaseConnection;
 export const untrackConnection = releaseConnection;
-
-export function httpRateLimit(ip: string | null | undefined): boolean {
-  // returns true if request is allowed
-  if (!FIREWALL_ENABLED) return true;
-  const n = normalizeIp(ip ?? '') || 'unknown';
-  const now = Date.now();
-  const stamps = (httpStamps.get(n) || []).filter((t) => t > now - 60_000);
-  if (stamps.length >= HTTP_RATE_LIMIT) {
-    httpStamps.set(n, stamps);
-    return false;
-  }
-  stamps.push(now);
-  httpStamps.set(n, stamps);
-  return true;
-}
 
 export function sanitizePath(p: string): string {
   return String(p || '').replace(/\/+/g, '/').replace(/\.\./g, '');
